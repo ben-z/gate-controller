@@ -107,7 +107,7 @@ def open_temporary():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return redirect('/')
+        return render_template('redirect_to_dashboard.html', action='open_temporary')
 
 @app.route('/open_permanent')
 def open_permanent():
@@ -122,7 +122,7 @@ def open_permanent():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return redirect('/')
+        return render_template('redirect_to_dashboard.html', action='open_permanent')
 
 @app.route('/close')
 def close():
@@ -138,7 +138,7 @@ def close():
 
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return redirect('/')
+        return render_template('redirect_to_dashboard.html', action='close')
 
 @app.route('/api/take_command', methods=['POST'])
 def command():
