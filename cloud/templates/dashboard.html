@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta http-equiv="refresh" content="1">
+    <style>
+        main {
+            text-align: center;
+        }
+        .action-button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 16px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 32px;
+            margin: 4px 2px;
+            transition-duration: 0.4s;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <h1>Gate Opener Dashboard</h1>
+        <h2>Target State: {{target_state}}</h2>
+        <h2>Seconds to closing: {{seconds_to_closing}}</h2>
+        <a class="action-button" href="./open_temporary">Open (Temporary)</a>
+        <br/>
+        <br/>
+        <a class="action-button" href="./open_permanent">Open (Permanent)</a>
+        <br/>
+        <br/>
+        <a class="action-button" href="./close">Close</a>
+    </main>
+</body>
+
+</html>
