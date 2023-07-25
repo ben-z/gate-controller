@@ -19,3 +19,7 @@ primary_region = "sea"
   auto_start_machines = true
   min_machines_running = 0
   processes = ["app"]
+
+[mounts]
+  source = "app_data"
+  destination = "/fly_app_data"

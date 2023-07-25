@@ -2,23 +2,60 @@ import arrow
 import time
 import atexit
 import logging
+import dbm
+import json
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from contextlib import contextmanager
 from flask import Flask, render_template, redirect, request
+from pathlib import Path
 from threading import Lock
 
+logging.basicConfig(level=logging.INFO)
+
 app = Flask(__name__)
+
 
 OPEN_TEMPORARY_SECONDS = 10
 COMMAND_HISTORY_MAX_LENGTH = 100
 
+
+# Use /fly_app_data as the data directory if running on Fly
+if Path('/fly_app_data').exists():
+    DATA_DIR = Path('/fly_app_data')
+else:
+    DATA_DIR = Path('./data')
+DATA_DIR.mkdir(exist_ok=True)
+DB_PATH = DATA_DIR / 'db.dbm'
+
+logging.info(f'Using DB_PATH: {DB_PATH}')
+
 state_mutex = Lock()
-state = {
+initial_state = {
     'target_state': 'closed', # closed, open_temporary, open_permanent
     'open_temporary_start': 0,
     'last_contact_with_gate': 0,
     'command_history': [],
 }
+
+def read_state():
+    with dbm.open(str(DB_PATH), 'c') as db:
+        if 'state' not in db:
+            return initial_state
+
+        return json.loads(db['state'])
+
+def write_state(state):
+    with dbm.open(str(DB_PATH), 'c') as db:
+        db['state'] = json.dumps(state)
+
+@contextmanager
+def state_provider():
+    state = read_state()
+    try:
+        yield state
+    finally:
+        write_state(state)
 
 def target_state_to_command(target_state):
     if target_state in ['open_temporary', 'open_permanent']:
@@ -39,7 +76,7 @@ def format_command_history(now, command_history):
 
 @app.route('/')
 def dashboard():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         now = time.time()
         if state['target_state'] == 'open_temporary':
             seconds_to_closing = f"{state['open_temporary_start'] + OPEN_TEMPORARY_SECONDS - now:.0f}"
@@ -56,7 +93,7 @@ def dashboard():
 
 @app.route('/open_temporary')
 def open_temporary():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         logging.info('CMD: open_temporary')
         now = time.time()
         state['target_state'] = 'open_temporary'
@@ -72,7 +109,7 @@ def open_temporary():
 
 @app.route('/open_permanent')
 def open_permanent():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         now = time.time()
         logging.info('CMD: open_permanent')
         state['target_state'] = 'open_permanent'
@@ -87,7 +124,7 @@ def open_permanent():
 
 @app.route('/close')
 def close():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         now = time.time()
         logging.info('CMD: close')
         state['target_state'] = 'closed'
@@ -103,14 +140,14 @@ def close():
 
 @app.route('/api/take_command', methods=['POST'])
 def command():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         now = time.time()
         logging.warn(f'API: take_command, payload: {request.json}')
         state['last_contact_with_gate'] = now
         return target_state_to_command(state['target_state'])
 
 def control_loop():
-    with state_mutex:
+    with state_mutex, state_provider() as state:
         now = time.time()
         if state['target_state'] == 'open_temporary' and state['open_temporary_start'] + OPEN_TEMPORARY_SECONDS < now:
             logging.info('open_temporary: Time is up, closing')
