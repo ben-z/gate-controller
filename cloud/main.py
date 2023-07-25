@@ -3,7 +3,7 @@ import atexit
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, render_template, redirect
+from flask import Flask, render_template, redirect, request
 from threading import Lock
 
 app = Flask(__name__)
@@ -14,6 +14,7 @@ state_mutex = Lock()
 state = {
     'target_state': 'closed', # closed, open_temporary, open_permanent
     'open_temporary_start': 0,
+    'last_contact_with_gate': 0,
 }
 
 def target_state_to_command(target_state):
@@ -32,7 +33,12 @@ def dashboard():
             seconds_to_closing = f"{state['open_temporary_start'] + OPEN_TEMPORARY_SECONDS - now:.0f}"
         else:
             seconds_to_closing = 'N/A'
-        return render_template('dashboard.html', target_state=state['target_state'], seconds_to_closing=seconds_to_closing)
+        return render_template(
+            'dashboard.html',
+            target_state=state['target_state'],
+            seconds_to_closing=seconds_to_closing,
+            seconds_since_last_contact_with_gate=f"{now - state['last_contact_with_gate']:.2f}",
+        )
 
 @app.route('/open_temporary')
 def open_temporary():
@@ -60,7 +66,9 @@ def close():
 @app.route('/api/take_command', methods=['POST'])
 def command():
     with state_mutex:
-        logging.info('CMD: command')
+        now = time.time()
+        logging.warn(f'API: take_command, payload: {request.json}')
+        state['last_contact_with_gate'] = now
         return target_state_to_command(state['target_state'])
 
 def control_loop():
