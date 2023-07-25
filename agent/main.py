@@ -49,11 +49,11 @@ try:
                 if not relay1_on:
                     GPIO.output(relay1, GPIO.HIGH)
             else:
-                raise ValueError(f"Unknown command: {commandl}")
+                raise ValueError(f"Unknown command: {command}")
         
             time.sleep(1)
         except Exception as e:
-            logging.error(f"Unexpected {err=}, {type(err)=}")
+            logging.error(f"Unexpected {e=}, {type(e)=}")
             logging.warning("Sleeping for 10 seconds and trying again")
             time.sleep(10)
 finally:
