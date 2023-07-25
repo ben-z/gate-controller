@@ -25,8 +25,6 @@ GPIO.setup(relay1, GPIO.OUT)
 logging.info("Initializing relay to off")
 GPIO.output(relay1, GPIO.LOW)
 
-relay1_on = False
-
 # Continuously poll for the latest command
 try:
     while True:
@@ -41,13 +39,11 @@ try:
             logging.info(f"Command: {command}")
         
             if command == 'closed':
-                logging.info(f"Turning off relay if on ({relay1_on=})")
-                if relay1_on:
-                    GPIO.output(relay1, GPIO.LOW)
+                logging.info(f"Turning off relay")
+                GPIO.output(relay1, GPIO.LOW)
             elif command == 'open':
-                logging.info(f"Turning on relay if off ({relay1_on=})")
-                if not relay1_on:
-                    GPIO.output(relay1, GPIO.HIGH)
+                logging.info(f"Turning on relay")
+                GPIO.output(relay1, GPIO.HIGH)
             else:
                 raise ValueError(f"Unknown command: {command}")
         
