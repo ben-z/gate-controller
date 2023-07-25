@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <meta http-equiv="refresh" content="1">
+    <!-- <meta http-equiv="refresh" content="1"> -->
     <style>
         main {
             text-align: center;
@@ -20,6 +20,14 @@
             transition-duration: 0.4s;
             cursor: pointer;
         }
+        .command-history table {
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .command-history table th {
+            padding-left: 30px;
+            padding-right: 30px;
+        }
     </style>
 </head>
 
@@ -36,6 +44,21 @@
         <br/>
         <br/>
         <a class="action-button" href="./close">Close</a>
+        <div class="command-history">
+            <h2>Command history</h2>
+            <table>
+            <tr>
+                <th>Timestamp</th>
+                <th>Target State</th>
+            </tr>
+            {% for command in command_history_formatted %}
+                <tr>
+                    <td>{{command.timestamp}}</td>
+                    <td>{{command.target_state}}</td>
+                </tr>
+            {% endfor %}
+            </table>
+        </div>
     </main>
 </body>
 

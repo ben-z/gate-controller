@@ -1,3 +1,4 @@
+import arrow
 import time
 import atexit
 import logging
@@ -9,12 +10,14 @@ from threading import Lock
 app = Flask(__name__)
 
 OPEN_TEMPORARY_SECONDS = 10
+COMMAND_HISTORY_MAX_LENGTH = 100
 
 state_mutex = Lock()
 state = {
     'target_state': 'closed', # closed, open_temporary, open_permanent
     'open_temporary_start': 0,
     'last_contact_with_gate': 0,
+    'command_history': [],
 }
 
 def target_state_to_command(target_state):
@@ -25,6 +28,15 @@ def target_state_to_command(target_state):
     else:
         raise Exception(f'Unknown target_state: {target_state}')
 
+def format_command_history(now, command_history):
+    formatted = []
+    for command in reversed(command_history):
+        formatted.append({
+            'timestamp': arrow.get(command['timestamp']).humanize(),
+            'target_state': command['target_state'],
+        })
+    return formatted
+
 @app.route('/')
 def dashboard():
     with state_mutex:
@@ -33,11 +45,13 @@ def dashboard():
             seconds_to_closing = f"{state['open_temporary_start'] + OPEN_TEMPORARY_SECONDS - now:.0f}"
         else:
             seconds_to_closing = 'N/A'
+        
         return render_template(
             'dashboard.html',
             target_state=state['target_state'],
             seconds_to_closing=seconds_to_closing,
             seconds_since_last_contact_with_gate=f"{now - state['last_contact_with_gate']:.2f}",
+            command_history_formatted=format_command_history(now, state['command_history']),
         )
 
 @app.route('/open_temporary')
@@ -47,20 +61,44 @@ def open_temporary():
         now = time.time()
         state['target_state'] = 'open_temporary'
         state['open_temporary_start'] = now
+
+        state['command_history'].append({
+            'timestamp': now,
+            'target_state': state['target_state'],
+        })
+        state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
+
         return redirect('/')
 
 @app.route('/open_permanent')
 def open_permanent():
     with state_mutex:
+        now = time.time()
         logging.info('CMD: open_permanent')
         state['target_state'] = 'open_permanent'
+
+        state['command_history'].append({
+            'timestamp': now,
+            'target_state': state['target_state'],
+        })
+        state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
+
         return redirect('/')
 
 @app.route('/close')
 def close():
     with state_mutex:
+        now = time.time()
         logging.info('CMD: close')
         state['target_state'] = 'closed'
+
+        state['command_history'].append({
+            'timestamp': now,
+            'target_state': state['target_state'],
+        })
+
+        state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
+
         return redirect('/')
 
 @app.route('/api/take_command', methods=['POST'])
