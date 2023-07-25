@@ -40,10 +40,12 @@ initial_state = {
 
 def read_state():
     with dbm.open(str(DB_PATH), 'c') as db:
-        if 'state' not in db:
-            return initial_state
+        state = initial_state.copy()
 
-        return json.loads(db['state'])
+        if 'state' in db:
+            state.update(json.loads(db['state']))
+
+        return state
 
 def write_state(state):
     with dbm.open(str(DB_PATH), 'c') as db:
