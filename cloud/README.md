@@ -2,10 +2,7 @@
 
 ```bash
 pip install -r requirements.txt
-```
-
-```bash
-flask --app main.py --debug run --port 8081
+python main.py
 ```
 
 ## Deployment

@@ -4,6 +4,7 @@ import atexit
 import logging
 import dbm
 import json
+import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import contextmanager
@@ -107,7 +108,7 @@ def open_temporary():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='open_temporary')
+        return render_template('redirect_to_dashboard.html', action='open_temporary', icon_name="gate-orange", title="Open Gate (Temporary)")
 
 @app.route('/open_permanent')
 def open_permanent():
@@ -122,7 +123,7 @@ def open_permanent():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='open_permanent')
+        return render_template('redirect_to_dashboard.html', action='open_permanent', icon_name="gate-red", title="Open Gate (Permanent)")
 
 @app.route('/close')
 def close():
@@ -138,7 +139,7 @@ def close():
 
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='close')
+        return render_template('redirect_to_dashboard.html', action='close', icon_name="gate-black", title="Close Gate")
 
 @app.route('/api/take_command', methods=['POST'])
 def command():
@@ -163,7 +164,10 @@ scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
-# Required for apscheduler to not run twice in Flask debug mode
-# https://stackoverflow.com/a/15491587/4527337
 if __name__ == '__main__':
-    app.run(use_reloader=False)
+    # use_reloader=False is required for apscheduler to not run twice
+    # in Flask debug mode. However, this means that we'll need to manually
+    # restart the server when we make changes to the backend code.
+    # https://stackoverflow.com/a/15491587/4527337
+    # https://stackoverflow.com/a/9476701/4527337
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=8081)
