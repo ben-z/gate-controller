@@ -5,12 +5,24 @@ import logging
 import dbm
 import json
 import os
+import sentry_sdk
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import contextmanager
 from flask import Flask, render_template, redirect, request
 from pathlib import Path
 from threading import Lock
+from sentry_sdk.crons import monitor
+
+sentry_sdk.init(
+    # Obtained from https://sentry.watonomous.ca/organizations/bentestorg2/projects/gate-opener/getting-started/python/
+    dsn="https://f8195556fd09492ba3be5b2b12acb773@sentry.watonomous.ca/4",
+
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    # We recommend adjusting this value in production.
+    traces_sample_rate=1.0
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -87,7 +99,7 @@ def dashboard():
             seconds_to_closing = 'N/A'
         
         return render_template(
-            'dashboard.html',
+            'dashboard.html.j2',
             target_state=state['target_state'],
             seconds_to_closing=seconds_to_closing,
             seconds_since_last_contact_with_gate=f"{now - state['last_contact_with_gate']:.2f}",
@@ -108,7 +120,7 @@ def open_temporary():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='open_temporary', icon_name="gate-orange", title="Open Gate (Temporary)")
+        return render_template('redirect_to_dashboard.html.j2', action='open_temporary', icon_name="gate-orange", title="Open Gate (Temporary)")
 
 @app.route('/open_permanent')
 def open_permanent():
@@ -123,7 +135,7 @@ def open_permanent():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='open_permanent', icon_name="gate-red", title="Open Gate (Permanent)")
+        return render_template('redirect_to_dashboard.html.j2', action='open_permanent', icon_name="gate-red", title="Open Gate (Permanent)")
 
 @app.route('/close')
 def close():
@@ -139,7 +151,7 @@ def close():
 
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html', action='close', icon_name="gate-black", title="Close Gate")
+        return render_template('redirect_to_dashboard.html.j2', action='close', icon_name="gate-black", title="Close Gate")
 
 @app.route('/api/take_command', methods=['POST'])
 def command():
@@ -149,6 +161,7 @@ def command():
         state['last_contact_with_gate'] = now
         return target_state_to_command(state['target_state'])
 
+@monitor(monitor_slug='gate-opener-cloud')
 def control_loop():
     with state_mutex, state_provider() as state:
         now = time.time()
@@ -170,4 +183,4 @@ if __name__ == '__main__':
     # restart the server when we make changes to the backend code.
     # https://stackoverflow.com/a/15491587/4527337
     # https://stackoverflow.com/a/9476701/4527337
-    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=8081)
+    app.run(debug=True, use_reloader=True, host='0.0.0.0', port=8081)
