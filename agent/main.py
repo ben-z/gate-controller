@@ -33,7 +33,7 @@ try:
             url = 'https://gate-opener-cloud.fly.dev/api/take_command'
             data = {'host': hostname}
         
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, timeout=5)
 
             command = response.text
             logging.info(f"Command: {command}")
