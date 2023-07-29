@@ -50,8 +50,8 @@ try:
             time.sleep(1)
         except Exception as e:
             logging.error(f"Unexpected {e=}, {type(e)=}")
-            logging.warning("Sleeping for 10 seconds and trying again")
-            time.sleep(10)
+            logging.warning("Sleeping for 2 seconds and trying again")
+            time.sleep(2)
 finally:
     logging.info("Turning off relays")
     GPIO.output(relay1, GPIO.LOW)

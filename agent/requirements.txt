@@ -1,1 +1,2 @@
 RPi.GPIO==0.7.1
+requests==2.22.0

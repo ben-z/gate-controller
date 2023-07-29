@@ -1,0 +1,10 @@
+services:
+  agent:
+    container_name: gate_opener_agent
+    build: .
+    volumes:
+      - ./:/workspace
+      - /dev/mem:/dev/mem
+    privileged: true # required for /dev/mem passthrough
+    command: python /workspace/main.py
+    restart: always
