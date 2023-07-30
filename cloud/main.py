@@ -13,10 +13,19 @@ from flask import Flask, render_template, redirect, request
 from pathlib import Path
 from threading import Lock
 from sentry_sdk.crons import monitor
+from sentry_sdk.integrations.logging import LoggingIntegration
 
+# All of this is already happening by default!
+sentry_logging = LoggingIntegration(
+    level=logging.INFO,        # Capture info and above as breadcrumbs
+    event_level=logging.ERROR  # Send errors as events
+)
 sentry_sdk.init(
     # Obtained from https://sentry.watonomous.ca/organizations/bentestorg2/projects/gate-opener/getting-started/python/
     dsn="https://f8195556fd09492ba3be5b2b12acb773@sentry.watonomous.ca/4",
+    integrations=[
+        sentry_logging,
+    ],
 
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for performance monitoring.
