@@ -46,7 +46,6 @@ GPIO.setup(relay1, GPIO.OUT)
 logging.info("Initializing relay to off")
 GPIO.output(relay1, GPIO.LOW)
 
-@monitor(monitor_slug='gate-opener-agent')
 def loop_once():
     try:
         #url = 'http://100.106.129.114:8081/api/take_command' # for debugging
@@ -71,10 +70,19 @@ def loop_once():
         logging.info("Sleeping for 2 seconds and trying again")
         time.sleep(2)
 
+@monitor(monitor_slug='gate-opener-agent')
+def ping_healthcheck():
+    pass
+
 # Continuously poll for the latest command
 try:
+    last_healthcheck_time = 0
     while True:
         loop_once()
+        # Ping healthcheck every minute
+        if time.time() - last_healthcheck_time > 60:
+            ping_healthcheck()
+            last_healthcheck_time = time.time()
         time.sleep(1)
 finally:
     logging.info("Turning off relays")

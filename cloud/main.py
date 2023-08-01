@@ -170,7 +170,6 @@ def command():
         state['last_contact_with_gate'] = now
         return target_state_to_command(state['target_state'])
 
-@monitor(monitor_slug='gate-opener-cloud')
 def control_loop():
     with state_mutex, state_provider() as state:
         now = time.time()
@@ -180,8 +179,13 @@ def control_loop():
         elif state['target_state'] == 'open_temporary':
             logging.info(f'open_temporary: Waiting for {state["open_temporary_start"] + OPEN_TEMPORARY_SECONDS - now} seconds to pass before closing')
 
+@monitor(monitor_slug='gate-opener-cloud')
+def ping_healthcheck():
+    pass
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=control_loop, trigger="interval", seconds=1)
+scheduler.add_job(func=ping_healthcheck, trigger="interval", seconds=60)
 scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
