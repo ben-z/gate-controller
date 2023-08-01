@@ -79,10 +79,11 @@ try:
     last_healthcheck_time = 0
     while True:
         loop_once()
+        now = time.time()
         # Ping healthcheck every minute
-        if time.time() - last_healthcheck_time > 60:
+        if now - last_healthcheck_time > 60:
             ping_healthcheck()
-            last_healthcheck_time = time.time()
+            last_healthcheck_time = now
         time.sleep(1)
 finally:
     logging.info("Turning off relays")
