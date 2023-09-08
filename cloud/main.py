@@ -14,6 +14,7 @@ from pathlib import Path
 from threading import Lock
 from sentry_sdk.crons import monitor
 from sentry_sdk.integrations.logging import LoggingIntegration
+from time import sleep
 
 # All of this is already happening by default!
 sentry_logging = LoggingIntegration(
@@ -181,7 +182,7 @@ def control_loop():
 
 @monitor(monitor_slug='gate-opener-cloud')
 def ping_healthcheck():
-    pass
+    sleep(0.5) # space out the begin and end API calls
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=control_loop, trigger="interval", seconds=1)
