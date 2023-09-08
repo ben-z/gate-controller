@@ -21,8 +21,8 @@ sentry_logging = LoggingIntegration(
     event_level=logging.ERROR  # Send errors as events
 )
 sentry_sdk.init(
-    # Obtained from https://sentry.watonomous.ca/organizations/bentestorg2/projects/gate-opener/getting-started/python/
-    dsn="https://f8195556fd09492ba3be5b2b12acb773@sentry.watonomous.ca/4",
+    # Obtained from https://unicorns-are-cool.sentry.io/settings/projects/gate-opener/keys/
+    dsn="https://b3184994f9d267983dc3a5c99747b8b0@o4505847402135552.ingest.sentry.io/4505847409410048",
     integrations=[
         sentry_logging,
     ],
