@@ -7,6 +7,7 @@ import logging
 import sentry_sdk
 from sentry_sdk.crons import monitor
 from sentry_sdk.integrations.logging import LoggingIntegration
+from time import sleep, perf_counter
 
 # All of this is already happening by default!
 sentry_logging = LoggingIntegration(
@@ -72,7 +73,7 @@ def loop_once():
 
 @monitor(monitor_slug='gate-opener-agent')
 def ping_healthcheck():
-    pass
+    sleep(0.5) # space out the begin and end API calls
 
 # Continuously poll for the latest command
 try:
@@ -82,7 +83,11 @@ try:
         now = time.time()
         # Ping healthcheck every minute
         if now - last_healthcheck_time > 60:
+            logging.info("Pinging healthcheck")
+            start = perf_counter()
             ping_healthcheck()
+            stop = perf_counter()
+            logging.info(f"Healthcheck loop completed in {stop-start:.2f} seconds")
             last_healthcheck_time = now
         time.sleep(1)
 finally:
