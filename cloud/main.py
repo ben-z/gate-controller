@@ -9,7 +9,7 @@ import sentry_sdk
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import contextmanager
-from flask import Flask, render_template, redirect, request
+from flask import Flask, render_template, redirect, request, session, url_for
 from pathlib import Path
 from threading import Lock
 from sentry_sdk.crons import monitor
@@ -22,26 +22,20 @@ sentry_logging = LoggingIntegration(
     event_level=logging.ERROR  # Send errors as events
 )
 sentry_sdk.init(
-    # Obtained from https://unicorns-are-cool.sentry.io/settings/projects/gate-opener/keys/
-    dsn="https://b3184994f9d267983dc3a5c99747b8b0@o4505847402135552.ingest.sentry.io/4505847409410048",
-    integrations=[
-        sentry_logging,
-    ],
-
-    # Set traces_sample_rate to 1.0 to capture 100%
-    # of transactions for performance monitoring.
-    # We recommend adjusting this value in production.
+    dsn="your_sentry_dsn",
+    integrations=[sentry_logging],
     traces_sample_rate=1.0
 )
 
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Replace with your actual secret key
 
+PASSWORD = 'your_secure_password'  # Replace with your actual password
 
 OPEN_TEMPORARY_SECONDS = 10
 COMMAND_HISTORY_MAX_LENGTH = 100
-
 
 # Use /fly_app_data as the data directory if running on Fly
 if Path('/fly_app_data').exists():
@@ -55,7 +49,7 @@ logging.info(f'Using DB_PATH: {DB_PATH}')
 
 state_mutex = Lock()
 initial_state = {
-    'target_state': 'closed', # closed, open_temporary, open_permanent
+    'target_state': 'closed',  # closed, open_temporary, open_permanent
     'open_temporary_start': 0,
     'last_contact_with_gate': 0,
     'command_history': [],
@@ -64,10 +58,8 @@ initial_state = {
 def read_state():
     with dbm.open(str(DB_PATH), 'c') as db:
         state = initial_state.copy()
-
         if 'state' in db:
             state.update(json.loads(db['state']))
-
         return state
 
 def write_state(state):
@@ -101,6 +93,9 @@ def format_command_history(now, command_history):
 
 @app.route('/')
 def dashboard():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
     with state_mutex, state_provider() as state:
         now = time.time()
         if state['target_state'] == 'open_temporary':
@@ -116,8 +111,26 @@ def dashboard():
             command_history_formatted=format_command_history(now, state['command_history']),
         )
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form['password'] == PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('dashboard'))
+        else:
+            return "Incorrect password, please try again."
+    return render_template('login.html.j2')
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
 @app.route('/open_temporary')
 def open_temporary():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
     with state_mutex, state_provider() as state:
         logging.info('CMD: open_temporary')
         now = time.time()
@@ -130,10 +143,13 @@ def open_temporary():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html.j2', action='open_temporary', icon_name="gate-orange", title="Open Gate (Temporary)")
+        return render_template('auto_close.html.j2', action='open_temporary', icon_name="gate-orange", title="Open Gate (Temporary)")
 
 @app.route('/open_permanent')
 def open_permanent():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
     with state_mutex, state_provider() as state:
         now = time.time()
         logging.info('CMD: open_permanent')
@@ -145,10 +161,13 @@ def open_permanent():
         })
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html.j2', action='open_permanent', icon_name="gate-red", title="Open Gate (Permanent)")
+        return render_template('auto_close.html.j2', action='open_permanent', icon_name="gate-red", title="Open Gate (Permanent)")
 
 @app.route('/close')
 def close():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
     with state_mutex, state_provider() as state:
         now = time.time()
         logging.info('CMD: close')
@@ -158,10 +177,9 @@ def close():
             'timestamp': now,
             'target_state': state['target_state'],
         })
-
         state['command_history'] = state['command_history'][-COMMAND_HISTORY_MAX_LENGTH:]
 
-        return render_template('redirect_to_dashboard.html.j2', action='close', icon_name="gate-black", title="Close Gate")
+        return render_template('auto_close.html.j2', action='close', icon_name="gate-black", title="Close Gate")
 
 @app.route('/api/take_command', methods=['POST'])
 def command():
@@ -182,19 +200,13 @@ def control_loop():
 
 @monitor(monitor_slug='gate-opener-cloud')
 def ping_healthcheck():
-    sleep(0.5) # space out the begin and end API calls
+    sleep(0.5)  # space out the begin and end API calls
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=control_loop, trigger="interval", seconds=1)
 scheduler.add_job(func=ping_healthcheck, trigger="interval", seconds=60)
 scheduler.start()
-# Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
-    # use_reloader=False is required for apscheduler to not run twice
-    # in Flask debug mode. However, this means that we'll need to manually
-    # restart the server when we make changes to the backend code.
-    # https://stackoverflow.com/a/15491587/4527337
-    # https://stackoverflow.com/a/9476701/4527337
     app.run(debug=True, use_reloader=True, host='0.0.0.0', port=8081)
