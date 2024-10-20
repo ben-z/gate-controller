@@ -30,9 +30,9 @@ sentry_sdk.init(
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Replace with your actual secret key
+app.secret_key = '#B8\xc3\x9d\xe2\xab\xdal\xf25\x8e\x07c\xf0\xba\xdf1\xca\x95?I7\x00'  # Replace with your actual secret key
 
-PASSWORD = 'your_secure_password'  # Replace with your actual password
+PASSWORD = 'Skibidi123'  # Replace with your actual password
 
 OPEN_TEMPORARY_SECONDS = 10
 COMMAND_HISTORY_MAX_LENGTH = 100
