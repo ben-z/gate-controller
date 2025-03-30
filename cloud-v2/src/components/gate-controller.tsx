@@ -202,10 +202,10 @@ export function GateController({ initialData }: GateControllerProps) {
               value={timeFormat}
               onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-              title="Select time format"
+              title={`Select time format (Controller timezone: ${config.controllerTimezone})`}
             >
               <option value="relative">Relative Time</option>
-              <option value="controller">Controller Time ({config.controllerTimezone})</option>
+              <option value="controller">Controller Time</option>
             </select>
           </div>
         </div>
