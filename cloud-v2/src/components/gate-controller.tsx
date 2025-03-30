@@ -60,9 +60,14 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
   });
   
   // Format times using ISO format
-  const localTime = displayDate.toLocaleString('en-US', { 
-    dateStyle: 'short',
-    timeStyle: 'medium',
+  const localTime = displayDate.toLocaleString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
     timeZoneName: 'short'
   });
   const utcTime = date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
