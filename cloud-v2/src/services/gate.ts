@@ -8,12 +8,13 @@ export async function getGateStatus(includeHistory: boolean = false): Promise<Ga
 export async function updateGateStatus(
   newStatus: 'open' | 'closed',
   includeHistory: boolean = false,
-  actor: 'manual' | 'schedule' | 'system' = 'manual'
+  actor: 'manual' | 'schedule' | 'system' = 'manual',
+  username?: string
 ): Promise<GateStatus> {
   if (newStatus !== 'open' && newStatus !== 'closed') {
     throw new Error(`Invalid status: ${newStatus}`);
   }
-  return db.updateGateStatus(newStatus, includeHistory, actor);
+  return db.updateGateStatus(newStatus, includeHistory, actor, username);
 }
 
 export async function updateLastContact(): Promise<void> {

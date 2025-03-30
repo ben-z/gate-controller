@@ -6,6 +6,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { GateStatus } from '@/types/gate';
 import { config } from '@/config';
 import useSWR from 'swr';
+import { useAuth } from '@/contexts/auth-context';
 
 /**
  * Time display format options:
@@ -88,6 +89,7 @@ interface GateControllerProps {
 }
 
 export function GateController({ initialData }: GateControllerProps) {
+  const { username } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
   const [isLoading, setIsLoading] = useState(false);
@@ -143,7 +145,7 @@ export function GateController({ initialData }: GateControllerProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, username }),
       });
       const data = await response.json();
       await mutate(data, false); // Update the cache with new data
@@ -234,7 +236,7 @@ export function GateController({ initialData }: GateControllerProps) {
         <div className="h-48 overflow-y-auto">
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {history.length === 0 ? (
-              <div className="px-4 py-3 text-gray-500 dark:text-gray-400 text-center">
+              <div className="px-4 py-3 text-gray-500 dark:text-gray-400">
                 No actions yet
               </div>
             ) : (
@@ -248,7 +250,11 @@ export function GateController({ initialData }: GateControllerProps) {
                       {entry.action === 'open' ? 'Opened' : 'Closed'}
                     </span>
                     <span className="text-sm text-gray-500 dark:text-gray-400">
-                      ({entry.actor})
+                      {entry.actor === 'manual' && entry.username ? (
+                        `by ${entry.username}`
+                      ) : (
+                        `(${entry.actor})`
+                      )}
                     </span>
                   </div>
                   <time className="text-sm text-gray-500 dark:text-gray-400">

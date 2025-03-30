@@ -37,7 +37,9 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
     timestamp INTEGER NOT NULL,
-    actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system'))
+    actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system')),
+    username TEXT,
+    FOREIGN KEY (username) REFERENCES users(username)
   );
 
   CREATE TABLE IF NOT EXISTS schedules (
@@ -95,8 +97,8 @@ if (userCount.count === 0) {
 const getStatusStmt = db.prepare('SELECT status, timestamp FROM gate_status WHERE id = 1');
 const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, timestamp = ? WHERE id = 1');
 const updateLastContactStmt = db.prepare('UPDATE gate_status SET timestamp = ? WHERE id = 1');
-const getHistoryStmt = db.prepare('SELECT action, timestamp, actor FROM gate_history ORDER BY timestamp DESC LIMIT 10');
-const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor) VALUES (?, ?, ?)');
+const getHistoryStmt = db.prepare('SELECT action, timestamp, actor, username FROM gate_history ORDER BY timestamp DESC LIMIT 10');
+const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor, username) VALUES (?, ?, ?, ?)');
 
 // Schedule statements
 const getSchedulesStmt = db.prepare('SELECT * FROM schedules ORDER BY created_at DESC');
@@ -130,14 +132,14 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
   return result;
 }
 
-export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false, actor: 'manual' | 'schedule' | 'system' = 'manual'): GateStatus {
+export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false, actor: 'manual' | 'schedule' | 'system' = 'manual', username?: string): GateStatus {
   const now = Date.now();
   
   // Update status
   updateStatusStmt.run(newStatus, now);
   
   // Add to history
-  insertHistoryStmt.run(newStatus, now, actor);
+  insertHistoryStmt.run(newStatus, now, actor, actor === 'manual' ? username : null);
   
   // Get updated state
   return getGateStatus(includeHistory);

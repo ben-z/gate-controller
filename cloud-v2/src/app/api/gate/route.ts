@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const data = await request.json();
   if (data.status && (data.status === 'open' || data.status === 'closed')) {
     try {
-      const result = await updateGateStatus(data.status, includeHistory);
+      const result = await updateGateStatus(data.status, includeHistory, 'manual', data.username);
       return NextResponse.json(result, {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
