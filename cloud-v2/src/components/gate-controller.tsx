@@ -28,7 +28,7 @@ function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boo
   }
 
   return (
-    <span title={`${absoluteTime} ${new Intl.DateTimeFormat().resolvedOptions().timeZone}`}>
+    <span title={absoluteTime}>
       {relativeTime}
     </span>
   );
@@ -146,7 +146,7 @@ export function GateController({ initialData }: GateControllerProps) {
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">History</h2>
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {isClient 
+              Times shown in {isClient 
                 ? new Intl.DateTimeFormat().resolvedOptions().timeZone
                 : 'UTC'}
             </span>
