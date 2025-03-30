@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSchedule, updateSchedule, deleteSchedule, getSchedules, Schedule } from '@/services/schedule';
+import { createSchedule, updateSchedule, deleteSchedule, getSchedules } from '@/services/schedule';
+import { validateCredentials } from '@/services/users';
 
 export async function GET() {
   try {
@@ -14,7 +15,23 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const schedule = createSchedule(body);
+    const { username, password } = body;
+
+    // Validate user credentials
+    const user = await validateCredentials(username, password);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    // Create schedule with user ID
+    const schedule = createSchedule({
+      name: body.name,
+      cronExpression: body.cronExpression,
+      action: body.action,
+      enabled: body.enabled,
+      created_by: user.id
+    }, user.id);
+
     return NextResponse.json(schedule);
   } catch (error) {
     console.error('Error creating schedule:', error);
@@ -34,7 +51,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Schedule ID is required' }, { status: 400 });
     }
 
-    const schedule = updateSchedule(id, updates);
+    const schedule = updateSchedule(Number(id), updates);
     return NextResponse.json(schedule);
   } catch (error) {
     console.error('Error updating schedule:', error);
@@ -54,7 +71,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Schedule ID is required' }, { status: 400 });
     }
 
-    deleteSchedule(id);
+    deleteSchedule(Number(id));
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting schedule:', error);
