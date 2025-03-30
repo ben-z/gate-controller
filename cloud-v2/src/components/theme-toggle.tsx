@@ -1,15 +1,9 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
 
 export function ThemeToggle() {
-  const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
-
-  // Avoid hydration mismatch
-  useEffect(() => setMounted(true), [])
-  if (!mounted) return null
 
   return (
     <div className="w-full max-w-sm border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800">

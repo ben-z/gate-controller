@@ -94,9 +94,14 @@ export default function Home() {
           {isLoading && "Updating gate status..."}
         </div>
 
+        {/* 
+        Disabled until the hydration issue is solved.
+        https://github.com/pacocoursey/next-themes/issues/296#issuecomment-2764424676
+
         <div className="w-full max-w-sm mt-8">
           <ThemeToggle />
         </div>
+        */}
 
         <div className="w-full max-w-sm mt-8 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800">
           <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
