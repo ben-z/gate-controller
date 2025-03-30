@@ -58,10 +58,14 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format absolute time based on how old it is
-  const localTime = isToday(date)
-    ? format(date, 'h:mm:ss a')
-    : format(date, 'MMM d, h:mm:ss a');
+  // Format absolute time based on how old it is, including timezone
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZoneAbbr = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2];
+  const localTime = `${
+    isToday(date)
+      ? format(date, 'h:mm:ss a')
+      : format(date, 'MMM d, h:mm:ss a')
+  } ${timeZoneAbbr}`;
   
   // Format UTC time
   const utcTime = format(date, "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
