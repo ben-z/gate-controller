@@ -12,8 +12,19 @@ function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boo
     return () => clearInterval(timer);
   }, []);
 
+  // Parse the ISO timestamp into a Date object
   const date = new Date(timestamp);
-  const relativeTime = formatDistanceToNow(date, { addSuffix: true });
+  
+  // Ensure the date is valid before proceeding
+  if (isNaN(date.getTime())) {
+    console.error('Invalid timestamp:', timestamp);
+    return <span>Invalid time</span>;
+  }
+
+  const relativeTime = formatDistanceToNow(date, { 
+    addSuffix: true,
+    includeSeconds: true  // Show more precise times for recent events
+  });
   
   // Format absolute time based on how old it is
   const absoluteTime = isToday(date)
