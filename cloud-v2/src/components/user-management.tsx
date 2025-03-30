@@ -49,7 +49,18 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
       setNewRole('user');
       setIsCreating(false);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to create user');
+      if (error instanceof Error) {
+        // Handle specific error cases
+        if (error.message.includes('already taken')) {
+          setError(`Username "${newUsername}" is already taken. Please choose a different username.`);
+        } else if (error.message.includes('Unauthorized')) {
+          setError('You are not authorized to create users. Only admins can create new users.');
+        } else {
+          setError(`Failed to create user: ${error.message}`);
+        }
+      } else {
+        setError('An unexpected error occurred while creating the user.');
+      }
     }
   };
 
@@ -67,7 +78,18 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
       setEditPassword('');
       setEditRole('user');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to update user');
+      if (error instanceof Error) {
+        // Handle specific error cases
+        if (error.message.includes('not found')) {
+          setError('This user no longer exists.');
+        } else if (error.message.includes('Unauthorized')) {
+          setError('You are not authorized to update users. Only admins can modify user accounts.');
+        } else {
+          setError(`Failed to update user: ${error.message}`);
+        }
+      } else {
+        setError('An unexpected error occurred while updating the user.');
+      }
     }
   };
 
@@ -77,7 +99,18 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
       try {
         await onUserDelete(id);
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Failed to delete user');
+        if (error instanceof Error) {
+          // Handle specific error cases
+          if (error.message.includes('not found')) {
+            setError('This user no longer exists.');
+          } else if (error.message.includes('Unauthorized')) {
+            setError('You are not authorized to delete users. Only admins can delete user accounts.');
+          } else {
+            setError(`Failed to delete user: ${error.message}`);
+          }
+        } else {
+          setError('An unexpected error occurred while deleting the user.');
+        }
       }
     }
   };

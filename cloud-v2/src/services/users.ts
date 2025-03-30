@@ -23,6 +23,16 @@ export interface UpdateUserParams {
   role?: 'admin' | 'user';
 }
 
+export class UserError extends Error {
+  constructor(
+    message: string,
+    public code: 'USERNAME_EXISTS' | 'USER_NOT_FOUND' | 'DATABASE_ERROR' | 'INVALID_INPUT'
+  ) {
+    super(message);
+    this.name = 'UserError';
+  }
+}
+
 export async function validateCredentials(username: string, password: string): Promise<User | null> {
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined;
   if (!user) return null;
@@ -42,19 +52,27 @@ export async function createUser({ username, password, role, created_by }: Creat
   const passwordHash = await bcrypt.hash(password, 10);
   const now = Date.now();
 
-  const result = db.prepare(`
-    INSERT INTO users (username, password_hash, role, created_at, created_by)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(username, passwordHash, role, now, created_by);
+  try {
+    const result = db.prepare(`
+      INSERT INTO users (username, password_hash, role, created_at, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(username, passwordHash, role, now, created_by);
 
-  return {
-    id: result.lastInsertRowid as number,
-    username,
-    role,
-    created_at: now,
-    created_by,
-    password_hash: passwordHash
-  };
+    return {
+      id: result.lastInsertRowid as number,
+      username,
+      role,
+      created_at: now,
+      created_by,
+      password_hash: passwordHash
+    };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      throw new UserError(`Username "${username}" is already taken`, 'USERNAME_EXISTS');
+    }
+    console.error('Database error creating user:', error);
+    throw new UserError('Failed to create user', 'DATABASE_ERROR');
+  }
 }
 
 export function updateUser({ id, password, role }: UpdateUserParams): User {
@@ -72,20 +90,30 @@ export function updateUser({ id, password, role }: UpdateUserParams): User {
   }
 
   if (updates.length === 0) {
-    throw new Error('No updates provided');
+    throw new UserError('No updates provided', 'INVALID_INPUT');
   }
 
   params.push(id);
 
-  const query = `
-    UPDATE users 
-    SET ${updates.join(', ')}
-    WHERE id = ?
-  `;
+  try {
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `;
 
-  db.prepare(query).run(...params);
+    const result = db.prepare(query).run(...params);
+    
+    if (result.changes === 0) {
+      throw new UserError(`User with ID ${id} not found`, 'USER_NOT_FOUND');
+    }
 
-  return getUserById(id);
+    return getUserById(id);
+  } catch (error) {
+    if (error instanceof UserError) throw error;
+    console.error('Database error updating user:', error);
+    throw new UserError('Failed to update user', 'DATABASE_ERROR');
+  }
 }
 
 export function deleteUser(id: number): void {
@@ -93,9 +121,17 @@ export function deleteUser(id: number): void {
 }
 
 export function getUserById(id: number): User {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
-  if (!user) throw new Error(`User not found: ${id}`);
-  return user;
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+    if (!user) {
+      throw new UserError(`User with ID ${id} not found`, 'USER_NOT_FOUND');
+    }
+    return user;
+  } catch (error) {
+    if (error instanceof UserError) throw error;
+    console.error('Database error getting user:', error);
+    throw new UserError('Failed to get user', 'DATABASE_ERROR');
+  }
 }
 
 export function getAllUsers(): User[] {
