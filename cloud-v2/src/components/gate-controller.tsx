@@ -67,8 +67,13 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
       : format(displayDate, 'MMM d, h:mm:ss a')
   } ${timeZoneAbbr}`;
   
-  // Format UTC time directly from Unix timestamp
-  const utcTime = format(date, "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
+  // Format UTC time by manually constructing it from UTC components
+  const utcHours = date.getUTCHours().toString().padStart(2, '0');
+  const utcMinutes = date.getUTCMinutes().toString().padStart(2, '0');
+  const utcSeconds = date.getUTCSeconds().toString().padStart(2, '0');
+  const utcMonth = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const utcDay = date.getUTCDate();
+  const utcTime = `${utcMonth} ${utcDay}, ${utcHours}:${utcMinutes}:${utcSeconds} UTC`;
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
