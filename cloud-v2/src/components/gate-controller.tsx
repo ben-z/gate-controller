@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { GateStatus } from '@/types/gate';
+import { config } from '@/config';
 
 /**
  * Time display format options:
  * - relative: Shows time relative to now (e.g., "2 minutes ago")
- * - utc: Shows time in UTC timezone
- * - local: Shows time in user's local timezone
+ * - controller: Shows time in controller's timezone
  */
-type TimeFormat = 'relative' | 'utc' | 'local';
+type TimeFormat = 'relative' | 'controller';
 
 /**
  * Displays a timestamp in various formats.
@@ -61,24 +61,22 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format times using specified format string with explicit timezones
+  // Format time using specified format string with controller timezone
   const formatStr = 'yyyy-MM-dd HH:mm:ss zzz';
-  const localTime = formatInTimeZone(displayDate, Intl.DateTimeFormat().resolvedOptions().timeZone, formatStr);
-  const utcTime = formatInTimeZone(date, 'UTC', formatStr);
+  const controllerTime = formatInTimeZone(displayDate, config.controllerTimezone, formatStr);
 
-  // During SSR, show UTC time to avoid hydration mismatch
+  // During SSR, show controller time to avoid hydration mismatch
   if (!isClient) {
-    return <span>{utcTime}</span>;
+    return <span>{controllerTime}</span>;
   }
 
   const displayTime = {
     relative: relativeTime,
-    utc: utcTime,
-    local: localTime
+    controller: controllerTime
   }[timeFormat];
 
   return (
-    <span title={localTime}>
+    <span title={controllerTime}>
       {displayTime}
     </span>
   );
@@ -94,16 +92,16 @@ export function GateController({ initialData }: GateControllerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   // Initialize time format from localStorage if available
-  // During SSR, use UTC to match the TimeDisplay component's SSR behavior
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>('utc');
+  // During SSR, use controller time to match the TimeDisplay component's SSR behavior
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
 
   // After hydration:
   // 1. Switch to client-side rendering
-  // 2. Load time format preference from localStorage (default to relative)
+  // 2. Load time format preference from localStorage (default to controller time)
   useEffect(() => {
     setIsClient(true);
     const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
-    setTimeFormat(savedFormat || 'relative');
+    setTimeFormat(savedFormat || 'controller');
   }, []);
 
   // Save time format preference to localStorage
@@ -207,8 +205,7 @@ export function GateController({ initialData }: GateControllerProps) {
               title="Select time format"
             >
               <option value="relative">Relative Time</option>
-              <option value="utc">UTC Time</option>
-              <option value="local">Local Time</option>
+              <option value="controller">Controller Time ({config.controllerTimezone})</option>
             </select>
           </div>
         </div>
