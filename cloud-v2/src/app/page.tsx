@@ -78,11 +78,9 @@ export default function Home() {
           </button>
         </div>
 
-        {isLoading && (
-          <div className="mt-4 text-gray-600">
-            Updating gate status...
-          </div>
-        )}
+        <div className="h-6 mt-4 text-gray-600">
+          {isLoading && "Updating gate status..."}
+        </div>
       </main>
     </div>
   );
