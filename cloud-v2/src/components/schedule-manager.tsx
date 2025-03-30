@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Schedule } from '@/services/schedule';
 import cronstrue from 'cronstrue';
 import { config } from '@/config';
 import { useAuth } from '@/contexts/auth-context';
+import useSWR, { mutate } from 'swr';
 
 interface ScheduleFormData {
   name: string;
@@ -15,8 +16,7 @@ interface ScheduleFormData {
 
 export function ScheduleManager() {
   const { username, currentPassword } = useAuth();
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: schedules = [], isLoading } = useSWR<Schedule[]>('/api/schedules');
   const [error, setError] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -26,24 +26,6 @@ export function ScheduleManager() {
     action: 'open',
     enabled: true
   });
-
-  useEffect(() => {
-    fetchSchedules();
-  }, []);
-
-  const fetchSchedules = async () => {
-    try {
-      const response = await fetch('/api/schedules');
-      if (!response.ok) throw new Error('Failed to fetch schedules');
-      const data = await response.json();
-      setSchedules(data);
-    } catch (error) {
-      console.error('Error fetching schedules:', error);
-      setError('Failed to load schedules');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +46,7 @@ export function ScheduleManager() {
         throw new Error(errorData.error || 'Failed to create schedule');
       }
 
-      const schedule = await response.json();
-      setSchedules([schedule, ...schedules]);
+      await mutate('/api/schedules');
       setNewSchedule({
         name: '',
         cronExpression: '',
@@ -98,8 +79,7 @@ export function ScheduleManager() {
         throw new Error(errorData.error || 'Failed to update schedule');
       }
 
-      const updatedSchedule = await response.json();
-      setSchedules(schedules.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+      await mutate('/api/schedules');
       setEditingSchedule(null);
     } catch (error) {
       console.error('Error updating schedule:', error);
@@ -124,7 +104,7 @@ export function ScheduleManager() {
         throw new Error(errorData.error || 'Failed to delete schedule');
       }
 
-      setSchedules(schedules.filter(s => s.id !== id));
+      await mutate('/api/schedules');
     } catch (error) {
       console.error('Error deleting schedule:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete schedule');
@@ -167,8 +147,7 @@ export function ScheduleManager() {
         throw new Error(errorData.error || 'Failed to toggle schedule');
       }
 
-      const updatedSchedule = await response.json();
-      setSchedules(schedules.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+      await mutate('/api/schedules');
     } catch (error) {
       console.error('Error toggling schedule:', error);
       setError(error instanceof Error ? error.message : 'Failed to toggle schedule');
