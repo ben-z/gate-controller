@@ -61,7 +61,7 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
   });
   
   // Format times using specified format string with explicit timezones
-  const formatStr = 'yyyy-MM-dd HH:mm:ss XXX';
+  const formatStr = 'yyyy-MM-dd HH:mm:ss zzz';
   const localTime = formatInTimeZone(displayDate, Intl.DateTimeFormat().resolvedOptions().timeZone, formatStr);
   const utcTime = formatInTimeZone(date, 'UTC', formatStr);
 
