@@ -2,7 +2,7 @@ import { GateController } from '@/components/gate-controller';
 
 interface HistoryEntry {
   action: 'open' | 'closed';
-  timestamp: string;
+  timestamp: number; // Unix timestamp in milliseconds
 }
 
 async function getInitialData() {

@@ -27,7 +27,7 @@ type TimeFormat = 'relative' | 'utc' | 'local';
  * However, for this use case, the current approach is sufficient.
  */
 function TimeDisplay({ timestamp, isClient, format: timeFormat }: { 
-  timestamp: string;
+  timestamp: number; // Unix timestamp in milliseconds
   isClient: boolean;
   format: TimeFormat;
 }) {
@@ -39,36 +39,36 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     return () => clearInterval(timer);
   }, []);
 
-  // Parse the ISO timestamp into a Date object
-  const serverDate = new Date(timestamp);
+  // Create Date objects from Unix timestamps
+  const date = new Date(timestamp);
   const clientNow = new Date();
   
-  // Ensure the date is valid before proceeding
-  if (isNaN(serverDate.getTime())) {
+  // Ensure the timestamp is valid
+  if (isNaN(date.getTime())) {
     console.error('Invalid timestamp:', timestamp);
     return <span>Invalid time</span>;
   }
 
   // If the server time is in the future relative to client time,
   // use the client's time instead to avoid "in X seconds" messages
-  const date = serverDate > clientNow ? clientNow : serverDate;
+  const displayDate = date > clientNow ? clientNow : date;
 
-  const relativeTime = formatDistanceToNow(date, { 
+  // Format relative time
+  const relativeTime = formatDistanceToNow(displayDate, { 
     addSuffix: true,
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format absolute time based on how old it is, including timezone
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Format local time with timezone
   const timeZoneAbbr = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2];
   const localTime = `${
-    isToday(date)
-      ? format(date, 'h:mm:ss a')
-      : format(date, 'MMM d, h:mm:ss a')
+    isToday(displayDate)
+      ? format(displayDate, 'h:mm:ss a')
+      : format(displayDate, 'MMM d, h:mm:ss a')
   } ${timeZoneAbbr}`;
   
-  // Format UTC time - parse the original ISO string which is already in UTC
-  const utcTime = format(new Date(timestamp), "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
+  // Format UTC time directly from Unix timestamp
+  const utcTime = format(date, "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
@@ -90,7 +90,7 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
 
 interface HistoryEntry {
   action: 'open' | 'closed';
-  timestamp: string;
+  timestamp: number; // Unix timestamp in milliseconds
 }
 
 interface GateControllerProps {
