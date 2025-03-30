@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface HistoryEntry {
   action: 'open' | 'closed';
@@ -91,6 +92,10 @@ export default function Home() {
 
         <div className="h-6 mt-4 text-gray-600 dark:text-gray-400">
           {isLoading && "Updating gate status..."}
+        </div>
+
+        <div className="w-full max-w-sm mt-8">
+          <ThemeToggle />
         </div>
 
         <div className="w-full max-w-sm mt-8 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800">
