@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
-import { HistoryEntry } from '@/types/gate';
+import { HistoryEntry, GateStatus } from '@/types/gate';
 
 // Initialize database
 const db = new Database(join(process.cwd(), 'gate.db'));
@@ -30,13 +30,18 @@ const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, updated_
 const getHistoryStmt = db.prepare('SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 10');
 const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp) VALUES (?, ?)');
 
-export function getGateStatus(): { status: 'open' | 'closed'; history: HistoryEntry[] } {
+export function getGateStatus(includeHistory: boolean = false): GateStatus {
   const status = getStatusStmt.get() as { status: 'open' | 'closed' };
-  const history = getHistoryStmt.all() as HistoryEntry[];
-  return { status: status.status, history };
+  const result: GateStatus = { status: status.status };
+  
+  if (includeHistory) {
+    result.history = getHistoryStmt.all() as HistoryEntry[];
+  }
+  
+  return result;
 }
 
-export function updateGateStatus(newStatus: 'open' | 'closed'): { status: 'open' | 'closed'; history: HistoryEntry[] } {
+export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false): GateStatus {
   const now = Date.now();
   
   // Update status
@@ -46,5 +51,5 @@ export function updateGateStatus(newStatus: 'open' | 'closed'): { status: 'open'
   insertHistoryStmt.run(newStatus, now);
   
   // Get updated state
-  return getGateStatus();
+  return getGateStatus(includeHistory);
 } 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatDistanceToNow, isToday } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+import { GateStatus } from '@/types/gate';
 
 /**
  * Time display format options:
@@ -83,21 +84,13 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
   );
 }
 
-interface HistoryEntry {
-  action: 'open' | 'closed';
-  timestamp: number; // Unix timestamp in milliseconds
-}
-
 interface GateControllerProps {
-  initialData: {
-    status: 'open' | 'closed';
-    history: HistoryEntry[];
-  };
+  initialData: GateStatus;
 }
 
 export function GateController({ initialData }: GateControllerProps) {
   const [gateStatus, setGateStatus] = useState(initialData.status);
-  const [history, setHistory] = useState(initialData.history);
+  const [history, setHistory] = useState(initialData.history || []);
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   // Initialize time format from localStorage if available
@@ -124,7 +117,7 @@ export function GateController({ initialData }: GateControllerProps) {
       const response = await fetch('/api/gate?includeHistory=true');
       const data = await response.json();
       setGateStatus(data.status);
-      setHistory(data.history);
+      setHistory(data.history || []);
     } catch (error) {
       console.error('Error fetching gate status:', error);
     }
@@ -139,7 +132,7 @@ export function GateController({ initialData }: GateControllerProps) {
   const updateGateStatus = async (newStatus: 'open' | 'closed') => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/gate', {
+      const response = await fetch('/api/gate?includeHistory=true', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +141,7 @@ export function GateController({ initialData }: GateControllerProps) {
       });
       const data = await response.json();
       setGateStatus(data.status);
-      setHistory(data.history);
+      setHistory(data.history || []);
     } catch (error) {
       console.error('Error updating gate status:', error);
     }

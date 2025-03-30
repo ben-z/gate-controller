@@ -5,5 +5,5 @@ export interface HistoryEntry {
 
 export interface GateStatus {
   status: 'open' | 'closed';
-  history: HistoryEntry[];
+  history?: HistoryEntry[];
 } 

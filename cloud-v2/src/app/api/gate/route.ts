@@ -10,10 +10,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const includeHistory = searchParams.get('includeHistory') === 'true';
   const data = await request.json();
   if (data.status && (data.status === 'open' || data.status === 'closed')) {
     try {
-      const result = await updateGateStatus(data.status);
+      const result = await updateGateStatus(data.status, includeHistory);
       return NextResponse.json(result);
     } catch {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
