@@ -59,24 +59,13 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format local time with timezone
-  const timeZoneAbbr = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2];
-  const localMonth = displayDate.toLocaleString('en-US', { month: 'short' });
-  const localDay = displayDate.getDate();
-  const localHours = displayDate.getHours().toString().padStart(2, '0');
-  const localMinutes = displayDate.getMinutes().toString().padStart(2, '0');
-  const localSeconds = displayDate.getSeconds().toString().padStart(2, '0');
-  const localTime = isToday(displayDate)
-    ? `${localHours}:${localMinutes}:${localSeconds} ${timeZoneAbbr}`
-    : `${localMonth} ${localDay}, ${localHours}:${localMinutes}:${localSeconds} ${timeZoneAbbr}`;
-  
-  // Format UTC time using the same format as local time
-  const utcMonth = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-  const utcDay = date.getUTCDate();
-  const utcHours = date.getUTCHours().toString().padStart(2, '0');
-  const utcMinutes = date.getUTCMinutes().toString().padStart(2, '0');
-  const utcSeconds = date.getUTCSeconds().toString().padStart(2, '0');
-  const utcTime = `${utcMonth} ${utcDay}, ${utcHours}:${utcMinutes}:${utcSeconds} UTC`;
+  // Format times using ISO format
+  const localTime = displayDate.toLocaleString('en-US', { 
+    dateStyle: 'short',
+    timeStyle: 'medium',
+    timeZoneName: 'short'
+  });
+  const utcTime = date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
