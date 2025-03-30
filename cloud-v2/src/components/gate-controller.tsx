@@ -67,8 +67,8 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
       : format(date, 'MMM d, h:mm:ss a')
   } ${timeZoneAbbr}`;
   
-  // Format UTC time
-  const utcTime = format(date, "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
+  // Format UTC time - parse the original ISO string which is already in UTC
+  const utcTime = format(new Date(timestamp), "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
