@@ -13,13 +13,18 @@ function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boo
   }, []);
 
   // Parse the ISO timestamp into a Date object
-  const date = new Date(timestamp);
+  const serverDate = new Date(timestamp);
+  const clientNow = new Date();
   
   // Ensure the date is valid before proceeding
-  if (isNaN(date.getTime())) {
+  if (isNaN(serverDate.getTime())) {
     console.error('Invalid timestamp:', timestamp);
     return <span>Invalid time</span>;
   }
+
+  // If the server time is in the future relative to client time,
+  // use the client's time instead to avoid "in X seconds" messages
+  const date = serverDate > clientNow ? clientNow : serverDate;
 
   const relativeTime = formatDistanceToNow(date, { 
     addSuffix: true,
