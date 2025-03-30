@@ -16,7 +16,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS gate_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
-    timestamp INTEGER NOT NULL
+    timestamp INTEGER NOT NULL,
+    actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system'))
   );
 
   -- Insert initial status if not exists
@@ -27,8 +28,8 @@ db.exec(`
 // Prepare statements for better performance
 const getStatusStmt = db.prepare('SELECT status FROM gate_status WHERE id = 1');
 const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, updated_at = ? WHERE id = 1');
-const getHistoryStmt = db.prepare('SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 10');
-const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp) VALUES (?, ?)');
+const getHistoryStmt = db.prepare('SELECT action, timestamp, actor FROM gate_history ORDER BY timestamp DESC LIMIT 10');
+const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor) VALUES (?, ?, ?)');
 
 export function getGateStatus(includeHistory: boolean = false): GateStatus {
   const status = getStatusStmt.get() as { status: 'open' | 'closed' };
@@ -41,14 +42,14 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
   return result;
 }
 
-export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false): GateStatus {
+export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false, actor: 'manual' | 'schedule' | 'system' = 'manual'): GateStatus {
   const now = Date.now();
   
   // Update status
   updateStatusStmt.run(newStatus, now);
   
   // Add to history
-  insertHistoryStmt.run(newStatus, now);
+  insertHistoryStmt.run(newStatus, now, actor);
   
   // Get updated state
   return getGateStatus(includeHistory);

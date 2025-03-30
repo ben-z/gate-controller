@@ -216,8 +216,8 @@ export function GateController({ initialData }: GateControllerProps) {
                 No actions yet
               </div>
             ) : (
-              history.map((entry, index) => (
-                <div key={index} className="px-4 py-3 flex justify-between items-center">
+              history.map((entry) => (
+                <div key={entry.timestamp} className="px-4 py-3 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
                       entry.action === 'open' ? 'bg-red-500 dark:bg-red-400' : 'bg-green-500 dark:bg-green-400'
@@ -225,10 +225,13 @@ export function GateController({ initialData }: GateControllerProps) {
                     <span className="font-medium">
                       {entry.action === 'open' ? 'Opened' : 'Closed'}
                     </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      ({entry.actor})
+                    </span>
                   </div>
                   <time className="text-sm text-gray-500 dark:text-gray-400">
-                    <TimeDisplay 
-                      timestamp={entry.timestamp} 
+                    <TimeDisplay
+                      timestamp={entry.timestamp}
                       isClient={isClient}
                       format={timeFormat}
                     />

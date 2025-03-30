@@ -5,9 +5,13 @@ export async function getGateStatus(includeHistory: boolean = false): Promise<Ga
   return db.getGateStatus(includeHistory);
 }
 
-export async function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false): Promise<GateStatus> {
+export async function updateGateStatus(
+  newStatus: 'open' | 'closed',
+  includeHistory: boolean = false,
+  actor: 'manual' | 'schedule' | 'system' = 'manual'
+): Promise<GateStatus> {
   if (newStatus !== 'open' && newStatus !== 'closed') {
     throw new Error(`Invalid status: ${newStatus}`);
   }
-  return db.updateGateStatus(newStatus, includeHistory);
+  return db.updateGateStatus(newStatus, includeHistory, actor);
 } 
