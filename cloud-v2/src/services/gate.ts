@@ -14,4 +14,8 @@ export async function updateGateStatus(
     throw new Error(`Invalid status: ${newStatus}`);
   }
   return db.updateGateStatus(newStatus, includeHistory, actor);
+}
+
+export async function updateLastContact(): Promise<void> {
+  return db.updateLastContact();
 } 

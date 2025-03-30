@@ -89,6 +89,7 @@ interface GateControllerProps {
 export function GateController({ initialData }: GateControllerProps) {
   const [gateStatus, setGateStatus] = useState(initialData.status);
   const [history, setHistory] = useState(initialData.history || []);
+  const [lastContactTimestamp, setLastContactTimestamp] = useState(initialData.lastContactTimestamp);
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   // Initialize time format from localStorage if available
@@ -116,6 +117,7 @@ export function GateController({ initialData }: GateControllerProps) {
       const data = await response.json();
       setGateStatus(data.status);
       setHistory(data.history || []);
+      setLastContactTimestamp(data.lastContactTimestamp);
     } catch (error) {
       console.error('Error fetching gate status:', error);
     }
@@ -148,11 +150,23 @@ export function GateController({ initialData }: GateControllerProps) {
 
   return (
     <>
-      <div className="text-xl flex items-center gap-2">
-        <span>Current Status:</span>
-        <span className={`font-bold ${gateStatus === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
-          {gateStatus.toUpperCase()}
-        </span>
+      <div className="text-xl flex flex-col items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span>Current Status:</span>
+          <span className={`font-bold ${gateStatus === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
+            {gateStatus.toUpperCase()}
+          </span>
+        </div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+          <span>Last contact with gate:</span>
+          <span className="font-medium">
+            <TimeDisplay timestamp={lastContactTimestamp} isClient={isClient} format="relative" />
+          </span>
+          <span className="text-gray-400 dark:text-gray-500">·</span>
+          <span className="font-mono text-xs">
+            <TimeDisplay timestamp={lastContactTimestamp} isClient={isClient} format="controller" />
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-8 sm:flex-row sm:gap-4">

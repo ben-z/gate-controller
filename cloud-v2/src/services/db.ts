@@ -21,7 +21,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS gate_status (
     id INTEGER PRIMARY KEY,
     status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    last_contact_timestamp INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS gate_history (
@@ -42,13 +43,14 @@ db.exec(`
   );
 
   -- Insert initial status if not exists
-  INSERT OR IGNORE INTO gate_status (id, status, updated_at) 
-  VALUES (1, 'closed', ${Date.now()});
+  INSERT OR IGNORE INTO gate_status (id, status, updated_at, last_contact_timestamp) 
+  VALUES (1, 'closed', ${Date.now()}, ${Date.now()});
 `);
 
 // Prepare statements for better performance
-const getStatusStmt = db.prepare('SELECT status FROM gate_status WHERE id = 1');
+const getStatusStmt = db.prepare('SELECT status, last_contact_timestamp FROM gate_status WHERE id = 1');
 const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, updated_at = ? WHERE id = 1');
+const updateLastContactStmt = db.prepare('UPDATE gate_status SET last_contact_timestamp = ? WHERE id = 1');
 const getHistoryStmt = db.prepare('SELECT action, timestamp, actor FROM gate_history ORDER BY timestamp DESC LIMIT 10');
 const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor) VALUES (?, ?, ?)');
 
@@ -67,8 +69,11 @@ const updateScheduleStmt = db.prepare(`
 const deleteScheduleStmt = db.prepare('DELETE FROM schedules WHERE id = ?');
 
 export function getGateStatus(includeHistory: boolean = false): GateStatus {
-  const status = getStatusStmt.get() as { status: 'open' | 'closed' };
-  const result: GateStatus = { status: status.status };
+  const status = getStatusStmt.get() as { status: 'open' | 'closed', last_contact_timestamp: number };
+  const result: GateStatus = { 
+    status: status.status,
+    lastContactTimestamp: status.last_contact_timestamp
+  };
   
   if (includeHistory) {
     result.history = getHistoryStmt.all() as HistoryEntry[];
@@ -88,6 +93,11 @@ export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: b
   
   // Get updated state
   return getGateStatus(includeHistory);
+}
+
+export function updateLastContact(): void {
+  const now = Date.now();
+  updateLastContactStmt.run(now);
 }
 
 // Schedule functions

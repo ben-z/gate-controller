@@ -1,6 +1,7 @@
 export type GateStatus = {
   status: 'open' | 'closed';
   history?: HistoryEntry[];
+  lastContactTimestamp: number; // Unix timestamp in milliseconds
 };
 
 export type HistoryEntry = {
