@@ -125,7 +125,13 @@ export function GateController({ initialData }: GateControllerProps) {
                     </span>
                   </div>
                   <time className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(entry.timestamp).toLocaleTimeString()}
+                    {new Date(entry.timestamp).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: true,
+                      timeZone: 'UTC'
+                    })}
                   </time>
                 </div>
               ))
