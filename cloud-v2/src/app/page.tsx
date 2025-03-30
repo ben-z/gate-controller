@@ -1,4 +1,5 @@
 import { GateController } from '@/components/gate-controller';
+import { ScheduleManager } from '@/components/schedule-manager';
 import { getGateStatus } from '@/services/gate';
 import { GateStatus } from '@/types/gate';
 
@@ -10,6 +11,7 @@ export default async function Home() {
       <main className="flex flex-col items-center gap-12 flex-1">
         <h1 className="text-3xl font-bold">Gate Controller</h1>
         <GateController initialData={initialData} />
+        <ScheduleManager />
       </main>
     </div>
   );
