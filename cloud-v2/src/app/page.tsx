@@ -5,28 +5,32 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 interface HistoryEntry {
   action: 'open' | 'closed';
-  timestamp: Date;
+  timestamp: string;
 }
 
 export default function Home() {
   const [gateStatus, setGateStatus] = useState('closed');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
-  const fetchStatus = async () => {
+  const fetchStatusAndHistory = async () => {
     try {
-      const response = await fetch('/api/gate');
+      const response = await fetch('/api/gate?includeHistory=true');
       const data = await response.json();
       setGateStatus(data.status);
+      setHistory(data.history);
     } catch (error) {
       console.error('Error fetching gate status:', error);
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStatus();
+    fetchStatusAndHistory();
     // Poll for status updates every 5 seconds
-    const interval = setInterval(fetchStatus, 5000);
+    const interval = setInterval(fetchStatusAndHistory, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -42,11 +46,7 @@ export default function Home() {
       });
       const data = await response.json();
       setGateStatus(data.status);
-      // Add to history
-      setHistory(prev => [
-        { action: newStatus, timestamp: new Date() },
-        ...prev.slice(0, 9) // Keep only last 10 entries
-      ]);
+      setHistory(data.history);
     } catch (error) {
       console.error('Error updating gate status:', error);
     }
@@ -58,18 +58,23 @@ export default function Home() {
       <main className="flex flex-col items-center gap-12 flex-1">
         <h1 className="text-3xl font-bold">Gate Controller</h1>
         
-        <div className="text-xl">
-          Current Status: <span className={`font-bold ${gateStatus === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
-            {gateStatus.toUpperCase()}
-          </span>
+        <div className="text-xl flex items-center gap-2">
+          <span>Current Status:</span>
+          {isInitialLoading ? (
+            <div className="inline-block w-24 h-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ marginTop: '1px', marginBottom: '1px' }} />
+          ) : (
+            <span className={`font-bold ${gateStatus === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
+              {gateStatus.toUpperCase()}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-col gap-8 sm:flex-row sm:gap-4">
           <button
             onClick={() => updateGateStatus('open')}
-            disabled={isLoading || gateStatus === 'open'}
+            disabled={isLoading || isInitialLoading || gateStatus === 'open'}
             className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-              isLoading || gateStatus === 'open'
+              isLoading || isInitialLoading || gateStatus === 'open'
                 ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-red-500 active:bg-red-600 dark:bg-red-600 dark:active:bg-red-700'
             }`}
@@ -79,9 +84,9 @@ export default function Home() {
 
           <button
             onClick={() => updateGateStatus('closed')}
-            disabled={isLoading || gateStatus === 'closed'}
+            disabled={isLoading || isInitialLoading || gateStatus === 'closed'}
             className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-              isLoading || gateStatus === 'closed'
+              isLoading || isInitialLoading || gateStatus === 'closed'
                 ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-green-500 active:bg-green-600 dark:bg-green-600 dark:active:bg-green-700'
             }`}
@@ -109,7 +114,19 @@ export default function Home() {
           </div>
           <div className="h-48 overflow-y-auto">
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {history.length === 0 ? (
+              {isInitialLoading ? (
+                <>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="px-4 py-3 flex justify-between items-center animate-pulse">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-gray-700" />
+                        <span className="w-16 h-5 bg-gray-200 dark:bg-gray-700 rounded" />
+                      </div>
+                      <span className="w-20 h-4 bg-gray-200 dark:bg-gray-700 rounded" />
+                    </div>
+                  ))}
+                </>
+              ) : history.length === 0 ? (
                 <div className="px-4 py-3 text-gray-500 dark:text-gray-400 text-center">
                   No actions yet
                 </div>
@@ -125,7 +142,7 @@ export default function Home() {
                       </span>
                     </div>
                     <time className="text-sm text-gray-500 dark:text-gray-400">
-                      {entry.timestamp.toLocaleTimeString()}
+                      {new Date(entry.timestamp).toLocaleTimeString()}
                     </time>
                   </div>
                 ))
