@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { GateStatus } from '@/types/gate';
 import { config } from '@/config';
+import useSWR from 'swr';
 
 /**
  * Time display format options:
@@ -87,18 +88,12 @@ interface GateControllerProps {
 }
 
 export function GateController({ initialData }: GateControllerProps) {
-  const [gateStatus, setGateStatus] = useState(initialData.status);
-  const [history, setHistory] = useState(initialData.history || []);
-  const [lastContactTimestamp, setLastContactTimestamp] = useState(initialData.lastContactTimestamp);
-  const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
+  const [isLoading, setIsLoading] = useState(false);
+
   // Initialize time format from localStorage if available
   // During SSR, use controller time to match the TimeDisplay component's SSR behavior
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
-
-  // After hydration:
-  // 1. Switch to client-side rendering
-  // 2. Load time format preference from localStorage (default to controller time)
   useEffect(() => {
     setIsClient(true);
     const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
@@ -111,23 +106,34 @@ export function GateController({ initialData }: GateControllerProps) {
     localStorage.setItem('timeFormat', format);
   };
 
-  const fetchStatusAndHistory = async () => {
-    try {
-      const response = await fetch('/api/gate?includeHistory=true');
-      const data = await response.json();
-      setGateStatus(data.status);
-      setHistory(data.history || []);
-      setLastContactTimestamp(data.lastContactTimestamp);
-    } catch (error) {
-      console.error('Error fetching gate status:', error);
+  // Fetch gate status and history using SWR
+  const { data, mutate } = useSWR<GateStatus>(
+    '/api/gate?includeHistory=true',
+    async (url) => {
+      const response = await fetch(url, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch gate status');
+      }
+      return response.json();
+    },
+    {
+      refreshInterval: 5000, // Refresh every 5 seconds
+      revalidateOnFocus: true, // Revalidate when window gets focused
+      revalidateOnReconnect: true, // Revalidate when browser regains network connection
+      dedupingInterval: 1000, // Dedupe requests within 1 second
+      fallbackData: initialData, // Use initialData as fallback during SSR
+      keepPreviousData: true, // Keep showing the old data while fetching
     }
-  };
+  );
 
+  // Add a debug effect to verify refresh is working
   useEffect(() => {
-    // Poll for status updates every 5 seconds
-    const interval = setInterval(fetchStatusAndHistory, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    console.log('Gate status updated:', data?.status, new Date().toISOString());
+  }, [data?.status]);
 
   const updateGateStatus = async (newStatus: 'open' | 'closed') => {
     setIsLoading(true);
@@ -140,21 +146,27 @@ export function GateController({ initialData }: GateControllerProps) {
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await response.json();
-      setGateStatus(data.status);
-      setHistory(data.history || []);
+      await mutate(data, false); // Update the cache with new data
     } catch (error) {
       console.error('Error updating gate status:', error);
     }
     setIsLoading(false);
   };
 
+  // Early return if data is not available
+  if (!data) {
+    return <div>Loading...</div>;
+  }
+
+  const { status, history = [], lastContactTimestamp } = data;
+
   return (
     <>
       <div className="text-xl flex flex-col items-center gap-2">
         <div className="flex items-center gap-2">
           <span>Current Status:</span>
-          <span className={`font-bold ${gateStatus === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
-            {gateStatus.toUpperCase()}
+          <span className={`font-bold ${status === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
+            {status.toUpperCase()}
           </span>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
@@ -172,9 +184,9 @@ export function GateController({ initialData }: GateControllerProps) {
       <div className="flex flex-col gap-8 sm:flex-row sm:gap-4">
         <button
           onClick={() => updateGateStatus('open')}
-          disabled={isLoading || gateStatus === 'open'}
+          disabled={isLoading || status === 'open'}
           className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            isLoading || gateStatus === 'open'
+            isLoading || status === 'open'
               ? 'bg-gray-400 dark:bg-gray-600'
               : 'bg-red-500 active:bg-red-600 dark:bg-red-600 dark:active:bg-red-700'
           }`}
@@ -184,9 +196,9 @@ export function GateController({ initialData }: GateControllerProps) {
 
         <button
           onClick={() => updateGateStatus('closed')}
-          disabled={isLoading || gateStatus === 'closed'}
+          disabled={isLoading || status === 'closed'}
           className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            isLoading || gateStatus === 'closed'
+            isLoading || status === 'closed'
               ? 'bg-gray-400 dark:bg-gray-600'
               : 'bg-green-500 active:bg-green-600 dark:bg-green-600 dark:active:bg-green-700'
           }`}
