@@ -42,24 +42,24 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col items-center gap-8">
-        <h1 className="text-4xl font-bold mb-8">Gate Controller</h1>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 font-[family-name:var(--font-geist-sans)] safe-top safe-bottom">
+      <main className="flex flex-col items-center gap-12">
+        <h1 className="text-3xl font-bold">Gate Controller</h1>
         
-        <div className="text-xl mb-4">
+        <div className="text-xl">
           Current Status: <span className={`font-bold ${gateStatus === 'open' ? 'text-green-600' : 'text-red-600'}`}>
             {gateStatus.toUpperCase()}
           </span>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-8 sm:flex-row sm:gap-4">
           <button
             onClick={() => updateGateStatus('open')}
             disabled={isLoading || gateStatus === 'open'}
-            className={`px-6 py-3 rounded-lg text-white font-bold ${
+            className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
               isLoading || gateStatus === 'open'
                 ? 'bg-gray-400'
-                : 'bg-green-600 hover:bg-green-700'
+                : 'bg-green-600 active:bg-green-700'
             }`}
           >
             Open Gate
@@ -68,10 +68,10 @@ export default function Home() {
           <button
             onClick={() => updateGateStatus('closed')}
             disabled={isLoading || gateStatus === 'closed'}
-            className={`px-6 py-3 rounded-lg text-white font-bold ${
+            className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
               isLoading || gateStatus === 'closed'
                 ? 'bg-gray-400'
-                : 'bg-red-600 hover:bg-red-700'
+                : 'bg-red-600 active:bg-red-700'
             }`}
           >
             Close Gate
