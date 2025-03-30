@@ -25,8 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const persistedState = localStorage.getItem('auth');
         if (persistedState) {
-          const { isAuthenticated, username, role } = JSON.parse(persistedState);
-          setState({ isAuthenticated, username, role, isLoading: false, currentPassword: null });
+          setState(JSON.parse(persistedState));
         } else {
           setState(prev => ({ ...prev, isLoading: false }));
         }
@@ -60,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           currentPassword: credentials.password,
         };
         setState(newState);
-        localStorage.setItem('auth', JSON.stringify({ isAuthenticated: true, username: data.user.username, role: data.user.role }));
+        localStorage.setItem('auth', JSON.stringify(newState));
         return true;
       }
       return false;
