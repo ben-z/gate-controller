@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { User } from '@/services/users';
+import { formatInTimeZone } from 'date-fns-tz';
+import { config } from '@/config';
+import { formatDistanceToNow } from 'date-fns';
 
 interface UserManagementProps {
   users: User[];
@@ -21,6 +24,20 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [error, setError] = useState<string | null>(null);
+
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const relativeTime = formatDistanceToNow(date, { 
+      addSuffix: true,
+      includeSeconds: true
+    });
+    const controllerTime = formatInTimeZone(date, config.controllerTimezone, 'MMM d, yyyy HH:mm:ss');
+    return (
+      <span title={controllerTime}>
+        {relativeTime}
+      </span>
+    );
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +138,7 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
                 Create
               </button>
@@ -162,50 +179,61 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                         setEditingUser(null);
                         setError(null);
                       }}
-                      className="text-gray-500 hover:text-gray-700"
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     >
                       Cancel
                     </button>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">New Password (leave blank to keep current)</label>
-                    <input
-                      type="password"
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Role</label>
-                    <select
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
-                      className="w-full px-3 py-2 border rounded-lg"
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Password</label>
+                      <input
+                        type="password"
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg"
+                        placeholder="Leave blank to keep current password"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Role</label>
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
+                        className="w-full px-3 py-2 border rounded-lg"
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                     >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                      Save Changes
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                  >
-                    Save Changes
-                  </button>
                 </form>
               ) : (
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-lg font-medium">{user.username}</h3>
-                    <p className="text-sm text-gray-500">
-                      Role: {user.role} | Created: {new Date(user.created_at).toLocaleDateString()}
-                      {isInitialAdmin && (
-                        <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded">
-                          Initial Admin
-                        </span>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-medium">{user.username}</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {user.role}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Created {formatTimestamp(user.created_at)}
+                      {user.created_by && (
+                        <>
+                          {' '}by{' '}
+                          <span className="font-medium">
+                            {users.find(u => u.id === user.created_by)?.username || 'Unknown'}
+                          </span>
+                        </>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     {canEdit && (
@@ -213,9 +241,9 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                         onClick={() => {
                           setEditingUser(user);
                           setEditRole(user.role);
-                          setError(null);
+                          setEditPassword('');
                         }}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                        className="px-3 py-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Edit
                       </button>
@@ -223,15 +251,10 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                     {canDelete && (
                       <button
                         onClick={() => handleDelete(user.id)}
-                        className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                        className="px-3 py-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
-                    )}
-                    {!canEdit && !canDelete && (
-                      <span className="text-sm text-gray-500">
-                        {isInitialAdmin ? 'Cannot modify initial admin' : 'Cannot modify current user'}
-                      </span>
                     )}
                   </div>
                 </div>
