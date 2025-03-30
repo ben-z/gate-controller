@@ -101,15 +101,16 @@ export function GateController({ initialData }: GateControllerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   // Initialize time format from localStorage if available
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>(() => {
-    // Only access localStorage after hydration
-    if (typeof window === 'undefined') return 'relative';
-    return (localStorage.getItem('timeFormat') as TimeFormat) || 'relative';
-  });
+  // During SSR, use UTC to match the TimeDisplay component's SSR behavior
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>('utc');
 
-  // After hydration, switch to client-side rendering
+  // After hydration:
+  // 1. Switch to client-side rendering
+  // 2. Load time format preference from localStorage (default to relative)
   useEffect(() => {
     setIsClient(true);
+    const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
+    setTimeFormat(savedFormat || 'relative');
   }, []);
 
   // Save time format preference to localStorage
