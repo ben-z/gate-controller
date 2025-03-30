@@ -174,10 +174,6 @@ export function GateController({ initialData }: GateControllerProps) {
           <span className="font-medium">
             <TimeDisplay timestamp={lastContactTimestamp} isClient={isClient} format="relative" />
           </span>
-          <span className="text-gray-400 dark:text-gray-500">·</span>
-          <span className="font-mono text-xs">
-            <TimeDisplay timestamp={lastContactTimestamp} isClient={isClient} format="controller" />
-          </span>
         </div>
       </div>
 
