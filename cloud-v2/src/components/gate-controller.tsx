@@ -60,10 +60,8 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
   });
   
   // Format times using ISO format
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const localDate = new Date(displayDate.getTime() - (displayDate.getTimezoneOffset() * 60000));
-  const localTime = `${localDate.toISOString().replace('Z', '')} ${timeZone}`;
-  const utcTime = date.toISOString().replace('Z', ' UTC');
+  const localTime = displayDate.toISOString();
+  const utcTime = date.toISOString();
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
