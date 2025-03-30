@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react';
 import { formatDistanceToNow, format, isToday } from 'date-fns';
 
+type TimeFormat = 'relative' | 'utc' | 'local';
+
 function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boolean }) {
   const [, forceUpdate] = useState({});
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>('relative');
 
   // Update the relative time display every minute
   useEffect(() => {
@@ -32,20 +35,39 @@ function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boo
   });
   
   // Format absolute time based on how old it is
-  const absoluteTime = isToday(date)
+  const localTime = isToday(date)
     ? format(date, 'h:mm:ss a')
     : format(date, 'MMM d, h:mm:ss a');
   
-  // During SSR, show UTC time to avoid hydration mismatch
-  const serverTime = format(date, 'h:mm:ss a');
+  // Format UTC time
+  const utcTime = format(date, "MMM d, HH:mm:ss 'UTC'", { timeZone: 'UTC' });
 
+  // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
-    return <span>{serverTime} UTC</span>;
+    return <span>{utcTime}</span>;
   }
 
+  const displayTime = {
+    relative: relativeTime,
+    utc: utcTime,
+    local: localTime
+  }[timeFormat];
+
   return (
-    <span title={absoluteTime}>
-      {relativeTime}
+    <span className="inline-flex items-center gap-2">
+      <span title={localTime}>
+        {displayTime}
+      </span>
+      <select 
+        value={timeFormat}
+        onChange={(e) => setTimeFormat(e.target.value as TimeFormat)}
+        className="text-xs bg-transparent border-none hover:bg-gray-100 rounded cursor-pointer"
+        title="Select time format"
+      >
+        <option value="relative">Relative</option>
+        <option value="utc">UTC</option>
+        <option value="local">Local</option>
+      </select>
     </span>
   );
 }
