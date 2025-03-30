@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatDistanceToNow, format, isToday } from 'date-fns';
+import { formatDistanceToNow, isToday } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 /**
  * Time display format options:
@@ -59,10 +60,10 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format times using specified format string
+  // Format times using specified format string with explicit timezones
   const formatStr = 'yyyy-MM-dd HH:mm:ss XXX';
-  const localTime = format(displayDate, formatStr);
-  const utcTime = format(date, formatStr);
+  const localTime = formatInTimeZone(displayDate, Intl.DateTimeFormat().resolvedOptions().timeZone, formatStr);
+  const utcTime = formatInTimeZone(date, 'UTC', formatStr);
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
