@@ -18,6 +18,12 @@ export function GateController({ initialData }: GateControllerProps) {
   const [gateStatus, setGateStatus] = useState(initialData.status);
   const [history, setHistory] = useState(initialData.history);
   const [isLoading, setIsLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // After hydration, switch to client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const fetchStatusAndHistory = async () => {
     try {
@@ -130,7 +136,7 @@ export function GateController({ initialData }: GateControllerProps) {
                       minute: '2-digit',
                       second: '2-digit',
                       hour12: true,
-                      timeZone: 'UTC'
+                      timeZone: isClient ? undefined : 'UTC' // Use local timezone after hydration
                     })}
                   </time>
                 </div>
