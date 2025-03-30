@@ -1,6 +1,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDistanceToNow, format, isToday } from 'date-fns';
+
+function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boolean }) {
+  const [, forceUpdate] = useState({});
+
+  // Update the relative time display every minute
+  useEffect(() => {
+    const timer = setInterval(() => forceUpdate({}), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const date = new Date(timestamp);
+  const relativeTime = formatDistanceToNow(date, { addSuffix: true });
+  
+  // Format absolute time based on how old it is
+  const absoluteTime = isToday(date)
+    ? format(date, 'h:mm:ss a')
+    : format(date, 'MMM d, h:mm:ss a');
+  
+  // During SSR, show UTC time to avoid hydration mismatch
+  const serverTime = format(date, 'h:mm:ss a');
+
+  if (!isClient) {
+    return <span>{serverTime} UTC</span>;
+  }
+
+  return (
+    <span title={`${absoluteTime} ${new Intl.DateTimeFormat().resolvedOptions().timeZone}`}>
+      {relativeTime}
+    </span>
+  );
+}
 
 interface HistoryEntry {
   action: 'open' | 'closed';
@@ -138,13 +170,7 @@ export function GateController({ initialData }: GateControllerProps) {
                     </span>
                   </div>
                   <time className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(entry.timestamp).toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: true,
-                      timeZone: isClient ? undefined : 'UTC' // Use local timezone after hydration
-                    })}
+                    <TimeDisplay timestamp={entry.timestamp} isClient={isClient} />
                   </time>
                 </div>
               ))
