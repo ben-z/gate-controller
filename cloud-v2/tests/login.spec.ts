@@ -57,7 +57,7 @@ test.describe('Login', () => {
     await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
   });
 
-  test.only('should maintain login state after page refresh', async ({ page }) => {
+  test('should maintain login state after page refresh', async ({ page }) => {
     // Login first
     const username = ADMIN_USERNAME;
     const password = ADMIN_PASSWORD;
