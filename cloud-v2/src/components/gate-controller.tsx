@@ -111,7 +111,14 @@ export function GateController({ initialData }: GateControllerProps) {
 
       <div className="w-full max-w-sm mt-8 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800">
         <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold">History</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">History</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {isClient 
+                ? new Intl.DateTimeFormat().resolvedOptions().timeZone
+                : 'UTC'}
+            </span>
+          </div>
         </div>
         <div className="h-48 overflow-y-auto">
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
