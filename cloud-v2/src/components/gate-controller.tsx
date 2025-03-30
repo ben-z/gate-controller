@@ -59,9 +59,10 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format times using ISO format
-  const localTime = displayDate.toISOString();
-  const utcTime = date.toISOString();
+  // Format times using specified format string
+  const formatStr = 'yyyy-MM-dd HH:mm:ss XXX';
+  const localTime = format(displayDate, formatStr);
+  const utcTime = format(date, formatStr);
 
   // During SSR, show UTC time to avoid hydration mismatch
   if (!isClient) {
