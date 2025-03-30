@@ -28,7 +28,7 @@ type TimeFormat = 'relative' | 'controller';
  * 3. Apply this offset when displaying times
  * However, for this use case, the current approach is sufficient.
  */
-function TimeDisplay({ timestamp, isClient, format: timeFormat }: { 
+export function TimeDisplay({ timestamp, isClient, format: timeFormat }: { 
   timestamp: number; // Unix timestamp in milliseconds
   isClient: boolean;
   format: TimeFormat;

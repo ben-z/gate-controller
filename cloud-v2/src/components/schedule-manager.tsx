@@ -5,6 +5,7 @@ import { Schedule } from '@/services/schedule';
 import { formatDistanceToNow } from 'date-fns';
 import cronstrue from 'cronstrue';
 import { config } from '@/config';
+import { TimeDisplay } from '@/components/gate-controller';
 
 interface ScheduleFormData {
   name: string;
@@ -253,9 +254,13 @@ export function ScheduleManager() {
                     <p className="text-sm text-gray-500">
                       {schedule.action} - {formatDistanceToNow(nextExecutionDate, { addSuffix: true })}
                     </p>
-                    <p className="text-xs text-gray-400">
-                      {nextExecutionDate.toLocaleString(undefined, { timeZone: config.controllerTimezone })}
-                    </p>
+                    <time className="text-xs text-gray-400">
+                      <TimeDisplay
+                        timestamp={nextExecutionDate.getTime()}
+                        isClient={true}
+                        format="controller"
+                      />
+                    </time>
                   </div>
                 </div>
               );
