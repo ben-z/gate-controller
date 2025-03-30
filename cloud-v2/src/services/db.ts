@@ -15,17 +15,9 @@ const db = new Database(dbPath);
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
-// Drop existing tables to ensure clean schema
-db.exec(`
-  DROP TABLE IF EXISTS schedules;
-  DROP TABLE IF EXISTS gate_history;
-  DROP TABLE IF EXISTS gate_status;
-  DROP TABLE IF EXISTS users;
-`);
-
 // Create tables with consistent schema
 db.exec(`
-  CREATE TABLE users (
+  CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
@@ -35,20 +27,20 @@ db.exec(`
     FOREIGN KEY (created_by) REFERENCES users(id)
   );
 
-  CREATE TABLE gate_status (
+  CREATE TABLE IF NOT EXISTS gate_status (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
     timestamp INTEGER NOT NULL
   );
 
-  CREATE TABLE gate_history (
+  CREATE TABLE IF NOT EXISTS gate_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
     timestamp INTEGER NOT NULL,
     actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system'))
   );
 
-  CREATE TABLE schedules (
+  CREATE TABLE IF NOT EXISTS schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cron_expression TEXT NOT NULL,
@@ -62,16 +54,19 @@ db.exec(`
 
 // Create indexes
 db.exec(`
-  CREATE INDEX idx_gate_status_timestamp ON gate_status(timestamp);
-  CREATE INDEX idx_gate_history_timestamp ON gate_history(timestamp);
-  CREATE INDEX idx_schedules_created_by ON schedules(created_by);
+  CREATE INDEX IF NOT EXISTS idx_gate_status_timestamp ON gate_status(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_gate_history_timestamp ON gate_history(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_schedules_created_by ON schedules(created_by);
 `);
 
-// Initialize gate status
-db.exec(`
-  INSERT INTO gate_status (id, status, timestamp) 
-  VALUES (1, 'closed', ${Date.now()});
-`);
+// Initialize gate status if it doesn't exist
+const gateStatusCount = db.prepare('SELECT COUNT(*) as count FROM gate_status').get() as { count: number };
+if (gateStatusCount.count === 0) {
+  db.exec(`
+    INSERT INTO gate_status (id, status, timestamp) 
+    VALUES (1, 'closed', ${Date.now()});
+  `);
+}
 
 // Initialize admin account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
@@ -82,10 +77,17 @@ if (userCount.count === 0) {
     const passwordHash = bcrypt.hashSync(password, 10);
     const now = Date.now();
     
-    db.prepare(`
-      INSERT INTO users (username, password_hash, role, created_at)
-      VALUES (?, ?, 'admin', ?)
-    `).run(username, passwordHash, now);
+    try {
+      db.prepare(`
+        INSERT INTO users (username, password_hash, role, created_at)
+        VALUES (?, ?, 'admin', ?)
+      `).run(username, passwordHash, now);
+    } catch (error) {
+      console.error('Failed to create admin account:', error);
+      // Don't throw here - we want the app to start even if admin creation fails
+    }
+  } else {
+    console.warn('No admin credentials provided in AUTH_CREDENTIALS environment variable');
   }
 }
 
