@@ -61,18 +61,21 @@ function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
   
   // Format local time with timezone
   const timeZoneAbbr = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2];
-  const localTime = `${
-    isToday(displayDate)
-      ? format(displayDate, 'h:mm:ss a')
-      : format(displayDate, 'MMM d, h:mm:ss a')
-  } ${timeZoneAbbr}`;
+  const localMonth = displayDate.toLocaleString('en-US', { month: 'short' });
+  const localDay = displayDate.getDate();
+  const localHours = displayDate.getHours().toString().padStart(2, '0');
+  const localMinutes = displayDate.getMinutes().toString().padStart(2, '0');
+  const localSeconds = displayDate.getSeconds().toString().padStart(2, '0');
+  const localTime = isToday(displayDate)
+    ? `${localHours}:${localMinutes}:${localSeconds} ${timeZoneAbbr}`
+    : `${localMonth} ${localDay}, ${localHours}:${localMinutes}:${localSeconds} ${timeZoneAbbr}`;
   
-  // Format UTC time by manually constructing it from UTC components
+  // Format UTC time using the same format as local time
+  const utcMonth = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const utcDay = date.getUTCDate();
   const utcHours = date.getUTCHours().toString().padStart(2, '0');
   const utcMinutes = date.getUTCMinutes().toString().padStart(2, '0');
   const utcSeconds = date.getUTCSeconds().toString().padStart(2, '0');
-  const utcMonth = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-  const utcDay = date.getUTCDate();
   const utcTime = `${utcMonth} ${utcDay}, ${utcHours}:${utcMinutes}:${utcSeconds} UTC`;
 
   // During SSR, show UTC time to avoid hydration mismatch
