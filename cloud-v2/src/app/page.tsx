@@ -93,14 +93,18 @@ export default function Home() {
           {isLoading && "Updating gate status..."}
         </div>
 
-        {history.length > 0 && (
-          <div className="w-full max-w-sm mt-8 border border-gray-200 rounded-xl overflow-hidden">
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-700">History</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {history.map((entry, index) => (
-                <div key={index} className="px-4 py-3 flex justify-between items-center">
+        <div className="w-full max-w-sm mt-8 border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-700">History</h2>
+          </div>
+          <div className="divide-y divide-gray-200 max-h-48 overflow-y-auto">
+            {history.length === 0 ? (
+              <div className="px-4 py-3 text-gray-500 text-center">
+                No actions yet
+              </div>
+            ) : (
+              history.map((entry, index) => (
+                <div key={index} className="px-4 py-3 flex justify-between items-center bg-white">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
                       entry.action === 'open' ? 'bg-red-500' : 'bg-green-500'
@@ -113,10 +117,10 @@ export default function Home() {
                     {entry.timestamp.toLocaleTimeString()}
                   </time>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   );
