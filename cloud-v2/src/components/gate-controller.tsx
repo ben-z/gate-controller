@@ -3,11 +3,35 @@
 import { useState, useEffect } from 'react';
 import { formatDistanceToNow, format, isToday } from 'date-fns';
 
+/**
+ * Time display format options:
+ * - relative: Shows time relative to now (e.g., "2 minutes ago")
+ * - utc: Shows time in UTC timezone
+ * - local: Shows time in user's local timezone
+ */
 type TimeFormat = 'relative' | 'utc' | 'local';
 
-function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boolean }) {
+/**
+ * Displays a timestamp in various formats.
+ * 
+ * Note on time synchronization:
+ * To handle potential clock differences between server and client, we compare
+ * the server timestamp with client's current time. If server time appears to be
+ * in the future (due to clock mismatch), we use client's time instead to avoid
+ * showing confusing "in X seconds" messages.
+ * 
+ * A more robust solution would be to:
+ * 1. Have server send its current time alongside timestamps
+ * 2. Calculate and store the server-client time offset
+ * 3. Apply this offset when displaying times
+ * However, for this use case, the current approach is sufficient.
+ */
+function TimeDisplay({ timestamp, isClient, format: timeFormat }: { 
+  timestamp: string;
+  isClient: boolean;
+  format: TimeFormat;
+}) {
   const [, forceUpdate] = useState({});
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>('relative');
 
   // Update the relative time display every minute
   useEffect(() => {
@@ -54,20 +78,8 @@ function TimeDisplay({ timestamp, isClient }: { timestamp: string, isClient: boo
   }[timeFormat];
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <span title={localTime}>
-        {displayTime}
-      </span>
-      <select 
-        value={timeFormat}
-        onChange={(e) => setTimeFormat(e.target.value as TimeFormat)}
-        className="text-xs bg-transparent border-none hover:bg-gray-100 rounded cursor-pointer"
-        title="Select time format"
-      >
-        <option value="relative">Relative</option>
-        <option value="utc">UTC</option>
-        <option value="local">Local</option>
-      </select>
+    <span title={localTime}>
+      {displayTime}
     </span>
   );
 }
@@ -89,11 +101,23 @@ export function GateController({ initialData }: GateControllerProps) {
   const [history, setHistory] = useState(initialData.history);
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  // Initialize time format from localStorage if available
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(() => {
+    // Only access localStorage after hydration
+    if (typeof window === 'undefined') return 'relative';
+    return (localStorage.getItem('timeFormat') as TimeFormat) || 'relative';
+  });
 
   // After hydration, switch to client-side rendering
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Save time format preference to localStorage
+  const handleTimeFormatChange = (format: TimeFormat) => {
+    setTimeFormat(format);
+    localStorage.setItem('timeFormat', format);
+  };
 
   const fetchStatusAndHistory = async () => {
     try {
@@ -183,6 +207,16 @@ export function GateController({ initialData }: GateControllerProps) {
         <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">History</h2>
+            <select 
+              value={timeFormat}
+              onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
+              className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+              title="Select time format"
+            >
+              <option value="relative">Relative Time</option>
+              <option value="utc">UTC Time</option>
+              <option value="local">Local Time</option>
+            </select>
           </div>
         </div>
         <div className="h-48 overflow-y-auto">
@@ -203,7 +237,11 @@ export function GateController({ initialData }: GateControllerProps) {
                     </span>
                   </div>
                   <time className="text-sm text-gray-500 dark:text-gray-400">
-                    <TimeDisplay timestamp={entry.timestamp} isClient={isClient} />
+                    <TimeDisplay 
+                      timestamp={entry.timestamp} 
+                      isClient={isClient}
+                      format={timeFormat}
+                    />
                   </time>
                 </div>
               ))
