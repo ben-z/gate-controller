@@ -134,7 +134,9 @@ export function ClientPage({ initialData }: ClientPageProps) {
           <span>Logged in as:</span>
           <span className="font-medium">{username}</span>
           <span className="text-gray-400 dark:text-gray-500">·</span>
-          <span className="capitalize">{role}</span>
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            {role}
+          </span>
         </div>
 
         <GateController initialData={initialData} />
