@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { loadEnvConfig } from '@next/env';
+
+// Load environment variables from .env.local file
+// https://stackoverflow.com/a/79403620
+loadEnvConfig(process.cwd());
 
 /**
  * Read environment variables from file.
