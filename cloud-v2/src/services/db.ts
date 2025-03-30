@@ -2,55 +2,97 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { HistoryEntry, GateStatus } from '@/types/gate';
 import { Schedule } from '@/services/schedule';
+import bcrypt from 'bcrypt';
+import { mkdir } from 'fs/promises';
 
-// Initialize database
-const db = new Database(join(process.cwd(), 'gate.db'));
+// Ensure data directory exists
+const dataDir = join(process.cwd(), 'data');
+await mkdir(dataDir, { recursive: true });
 
-interface ScheduleRow {
-  id: string;
-  name: string;
-  cron_expression: string;
-  action: 'open' | 'closed';
-  enabled: number;
-  created_at: number;
-  updated_at: number;
-}
+const dbPath = join(dataDir, 'gate.db');
+const db = new Database(dbPath);
 
-// Create tables if they don't exist
+// Enable foreign keys
+db.pragma('foreign_keys = ON');
+
+// Drop existing tables to ensure clean schema
 db.exec(`
-  CREATE TABLE IF NOT EXISTS gate_status (
-    id INTEGER PRIMARY KEY,
-    status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
-    updated_at INTEGER NOT NULL,
-    last_contact_timestamp INTEGER NOT NULL
+  DROP TABLE IF EXISTS schedules;
+  DROP TABLE IF EXISTS gate_history;
+  DROP TABLE IF EXISTS gate_status;
+  DROP TABLE IF EXISTS users;
+`);
+
+// Create tables with consistent schema
+db.exec(`
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+    created_at INTEGER NOT NULL,
+    created_by INTEGER,
+    FOREIGN KEY (created_by) REFERENCES users(id)
   );
 
-  CREATE TABLE IF NOT EXISTS gate_history (
+  CREATE TABLE gate_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+    timestamp INTEGER NOT NULL
+  );
+
+  CREATE TABLE gate_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
     timestamp INTEGER NOT NULL,
     actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system'))
   );
 
-  CREATE TABLE IF NOT EXISTS schedules (
-    id TEXT PRIMARY KEY,
+  CREATE TABLE schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cron_expression TEXT NOT NULL,
-    action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
-    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+    action TEXT NOT NULL CHECK (action IN ('open', 'close')),
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    created_by INTEGER NOT NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id)
   );
-
-  -- Insert initial status if not exists
-  INSERT OR IGNORE INTO gate_status (id, status, updated_at, last_contact_timestamp) 
-  VALUES (1, 'closed', ${Date.now()}, ${Date.now()});
 `);
 
+// Create indexes
+db.exec(`
+  CREATE INDEX idx_gate_status_timestamp ON gate_status(timestamp);
+  CREATE INDEX idx_gate_history_timestamp ON gate_history(timestamp);
+  CREATE INDEX idx_schedules_created_by ON schedules(created_by);
+`);
+
+// Initialize gate status
+db.exec(`
+  INSERT INTO gate_status (id, status, timestamp) 
+  VALUES (1, 'closed', ${Date.now()});
+`);
+
+// Initialize admin account if no users exist
+const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+if (userCount.count === 0) {
+  const adminCredentials = JSON.parse(process.env.AUTH_CREDENTIALS || '{}');
+  if (adminCredentials?.username && adminCredentials?.password) {
+    const { username, password } = adminCredentials;
+    const passwordHash = bcrypt.hashSync(password, 10);
+    const now = Date.now();
+    
+    db.prepare(`
+      INSERT INTO users (username, password_hash, role, created_at)
+      VALUES (?, ?, 'admin', ?)
+    `).run(username, passwordHash, now);
+  }
+}
+
 // Prepare statements for better performance
-const getStatusStmt = db.prepare('SELECT status, last_contact_timestamp FROM gate_status WHERE id = 1');
-const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, updated_at = ? WHERE id = 1');
-const updateLastContactStmt = db.prepare('UPDATE gate_status SET last_contact_timestamp = ? WHERE id = 1');
+const getStatusStmt = db.prepare('SELECT status, timestamp FROM gate_status WHERE id = 1');
+const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, timestamp = ? WHERE id = 1');
+const updateLastContactStmt = db.prepare('UPDATE gate_status SET timestamp = ? WHERE id = 1');
 const getHistoryStmt = db.prepare('SELECT action, timestamp, actor FROM gate_history ORDER BY timestamp DESC LIMIT 10');
 const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor) VALUES (?, ?, ?)');
 
@@ -58,21 +100,25 @@ const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestam
 const getSchedulesStmt = db.prepare('SELECT * FROM schedules ORDER BY created_at DESC');
 const getScheduleStmt = db.prepare('SELECT * FROM schedules WHERE id = ?');
 const insertScheduleStmt = db.prepare(`
-  INSERT INTO schedules (id, name, cron_expression, action, enabled, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO schedules (name, cron_expression, action, is_active, created_at, created_by)
+  VALUES (?, ?, ?, ?, ?, ?)
 `);
 const updateScheduleStmt = db.prepare(`
   UPDATE schedules 
-  SET name = ?, cron_expression = ?, action = ?, enabled = ?, updated_at = ?
+  SET name = ?, cron_expression = ?, action = ?, is_active = ?
   WHERE id = ?
 `);
 const deleteScheduleStmt = db.prepare('DELETE FROM schedules WHERE id = ?');
 
 export function getGateStatus(includeHistory: boolean = false): GateStatus {
-  const status = getStatusStmt.get() as { status: 'open' | 'closed', last_contact_timestamp: number };
+  const status = getStatusStmt.get() as { 
+    status: 'open' | 'closed';
+    timestamp: number;
+  };
+
   const result: GateStatus = { 
     status: status.status,
-    lastContactTimestamp: status.last_contact_timestamp
+    lastContactTimestamp: status.timestamp
   };
   
   if (includeHistory) {
@@ -96,86 +142,65 @@ export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: b
 }
 
 export function updateLastContact(): void {
-  const now = Date.now();
-  updateLastContactStmt.run(now);
+  updateLastContactStmt.run(Date.now());
 }
 
 // Schedule functions
 export function getSchedules(): Schedule[] {
-  return (getSchedulesStmt.all() as ScheduleRow[]).map(row => ({
-    id: row.id,
-    name: row.name,
-    cronExpression: row.cron_expression,
-    action: row.action,
-    enabled: Boolean(row.enabled)
-  }));
+  return getSchedulesStmt.all() as Schedule[];
 }
 
-export function getSchedule(id: string): Schedule | null {
-  const row = getScheduleStmt.get(id) as ScheduleRow | undefined;
-  if (!row) return null;
-  
-  return {
-    id: row.id,
-    name: row.name,
-    cronExpression: row.cron_expression,
-    action: row.action,
-    enabled: Boolean(row.enabled)
-  };
+export function getSchedule(id: number): Schedule | null {
+  const schedule = getScheduleStmt.get(id) as Schedule | undefined;
+  return schedule || null;
 }
 
-export function createSchedule(schedule: Omit<Schedule, 'id'>): Schedule {
+export function createSchedule(schedule: Omit<Schedule, 'id'> & { created_by: number }): Schedule {
   const now = Date.now();
-  const id = crypto.randomUUID();
   
-  insertScheduleStmt.run(
-    id,
+  const result = insertScheduleStmt.run(
     schedule.name,
     schedule.cronExpression,
     schedule.action,
     schedule.enabled ? 1 : 0,
     now,
-    now
+    schedule.created_by
   );
-  
+
   return {
-    ...schedule,
-    id
+    id: result.lastInsertRowid as number,
+    name: schedule.name,
+    cronExpression: schedule.cronExpression,
+    action: schedule.action,
+    enabled: schedule.enabled
   };
 }
 
-export function updateSchedule(id: string, updates: Partial<Omit<Schedule, 'id'>>): Schedule {
+export function updateSchedule(id: number, updates: Partial<Omit<Schedule, 'id'>>): Schedule {
   const existing = getSchedule(id);
   if (!existing) throw new Error(`Schedule not found: ${id}`);
-  
-  const now = Date.now();
+
   const updated = {
     ...existing,
-    ...updates,
-    updated_at: now
+    ...updates
   };
-  
+
   updateScheduleStmt.run(
     updated.name,
     updated.cronExpression,
     updated.action,
     updated.enabled ? 1 : 0,
-    now,
     id
   );
-  
-  return {
-    id,
-    name: updated.name,
-    cronExpression: updated.cronExpression,
-    action: updated.action,
-    enabled: updated.enabled
-  };
+
+  return updated;
 }
 
-export function deleteSchedule(id: string): void {
+export function deleteSchedule(id: number): void {
   const result = deleteScheduleStmt.run(id);
   if (result.changes === 0) {
     throw new Error(`Schedule not found: ${id}`);
   }
-} 
+}
+
+export default db; 
