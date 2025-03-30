@@ -2,6 +2,7 @@ import { GateController } from '@/components/gate-controller';
 import { ScheduleManager } from '@/components/schedule-manager';
 import { getGateStatus } from '@/services/gate';
 import { GateStatus } from '@/types/gate';
+import '@/services/init';  // Import initialization
 
 export default async function Home() {
   const initialData: GateStatus = await getGateStatus(true);

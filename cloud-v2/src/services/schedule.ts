@@ -1,6 +1,7 @@
 import cron from 'cron';
 import { updateGateStatus } from './gate';
 import { config } from '@/config';
+import * as db from './db';
 
 export interface Schedule {
   id: string;
@@ -10,11 +11,23 @@ export interface Schedule {
   enabled: boolean;
 }
 
-// In-memory storage for schedules
-const schedules: Schedule[] = [];
-
 // Map to store cron jobs
 const cronJobs = new Map<string, cron.CronJob>();
+
+/**
+ * Initializes all enabled schedules from the database
+ */
+export function initializeSchedules(): void {
+  const schedules = getSchedules();
+  console.log(`Initializing ${schedules.length} schedules...`);
+  
+  for (const schedule of schedules) {
+    if (schedule.enabled) {
+      console.log(`Starting schedule: ${schedule.name}`);
+      startSchedule(schedule);
+    }
+  }
+}
 
 /**
  * Validates a cron expression
@@ -55,12 +68,7 @@ export function createSchedule(schedule: Omit<Schedule, 'id'>): Schedule {
     throw new Error(`Invalid cron expression: ${schedule.cronExpression}`);
   }
 
-  const newSchedule: Schedule = {
-    ...schedule,
-    id: crypto.randomUUID(),
-  };
-
-  schedules.push(newSchedule);
+  const newSchedule = db.createSchedule(schedule);
   
   if (newSchedule.enabled) {
     startSchedule(newSchedule);
@@ -73,11 +81,6 @@ export function createSchedule(schedule: Omit<Schedule, 'id'>): Schedule {
  * Updates an existing schedule
  */
 export function updateSchedule(id: string, updates: Partial<Omit<Schedule, 'id'>>): Schedule {
-  const index = schedules.findIndex(s => s.id === id);
-  if (index === -1) {
-    throw new Error(`Schedule not found: ${id}`);
-  }
-
   if (updates.cronExpression && !validateCronExpression(updates.cronExpression)) {
     throw new Error(`Invalid cron expression: ${updates.cronExpression}`);
   }
@@ -85,12 +88,7 @@ export function updateSchedule(id: string, updates: Partial<Omit<Schedule, 'id'>
   // Stop existing job if it exists
   stopSchedule(id);
 
-  const updatedSchedule: Schedule = {
-    ...schedules[index],
-    ...updates,
-  };
-
-  schedules[index] = updatedSchedule;
+  const updatedSchedule = db.updateSchedule(id, updates);
 
   if (updatedSchedule.enabled) {
     startSchedule(updatedSchedule);
@@ -103,20 +101,15 @@ export function updateSchedule(id: string, updates: Partial<Omit<Schedule, 'id'>
  * Deletes a schedule
  */
 export function deleteSchedule(id: string): void {
-  const index = schedules.findIndex(s => s.id === id);
-  if (index === -1) {
-    throw new Error(`Schedule not found: ${id}`);
-  }
-
   stopSchedule(id);
-  schedules.splice(index, 1);
+  db.deleteSchedule(id);
 }
 
 /**
  * Gets all schedules
  */
 export function getSchedules(): Schedule[] {
-  return [...schedules];
+  return db.getSchedules();
 }
 
 /**
@@ -124,7 +117,7 @@ export function getSchedules(): Schedule[] {
  */
 export function getUpcomingExecutions(limit: number = 5): Array<{ schedule: Schedule; nextExecution: Date }> {
   const now = new Date();
-  const upcoming = schedules
+  const upcoming = getSchedules()
     .filter(s => s.enabled)
     .map(schedule => ({
       schedule,
