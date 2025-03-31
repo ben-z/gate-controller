@@ -7,7 +7,6 @@ import { getSchedule, updateGateStatus } from "./db";
 const REDIS_CONNECTION_CONFIG = {
   host: config.redis.host,
   port: config.redis.port,
-  password: config.redis.password,
 };
 
 // Create a queue for gate control jobs
