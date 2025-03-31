@@ -4,7 +4,7 @@ import { User, CreateUserParams, UpdateUserParams } from '@/types/user';
 const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error('Failed to fetch users');
+    throw new Error(`Failed to fetch users: ${res.statusText}`);
   }
   return res.json();
 };
@@ -31,7 +31,7 @@ export async function createUser(user: CreateUserParams) {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to create user');
+    throw new Error(`Failed to create user ${user.username}: ${res.statusText}`);
   }
 
   return res.json();
@@ -47,7 +47,7 @@ export async function updateUser(user: UpdateUserParams) {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to update user');
+    throw new Error(`Failed to update user ${user.username}: ${res.statusText}`);
   }
 
   return res.json();
@@ -59,6 +59,6 @@ export async function deleteUser(username: string) {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to delete user');
+    throw new Error(`Failed to delete user ${username}: ${res.statusText}`);
   }
 } 

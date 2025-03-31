@@ -10,6 +10,7 @@ export function UserManagement() {
   const { users, isLoading, isError, mutate } = useUsers();
   const [isCreating, setIsCreating] = useState(false);
   const [editingUsername, setEditingUsername] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateUserParams>({
     username: '',
     password: '',
@@ -18,6 +19,7 @@ export function UserManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     try {
       if (editingUsername) {
         await updateUser({
@@ -38,6 +40,11 @@ export function UserManagement() {
       });
     } catch (error) {
       console.error('Failed to save user:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred while saving the user');
+      }
     }
   };
 
@@ -53,11 +60,17 @@ export function UserManagement() {
 
   const handleDelete = async (username: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
+    setError(null);
     try {
       await deleteUser(username);
       await mutate(); // Revalidate the data
     } catch (error) {
       console.error('Failed to delete user:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred while deleting the user');
+      }
     }
   };
 
@@ -72,15 +85,27 @@ export function UserManagement() {
   };
 
   if (isError) {
-    return <div>Error loading users</div>;
+    return (
+      <div className="text-center py-4 text-red-500 dark:text-red-400">
+        Error loading users. Please try again later.
+      </div>
+    );
   }
 
   if (isLoading && !users) {
-    return <div>Loading users...</div>;
+    return (
+      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+        Loading users...
+      </div>
+    );
   }
 
   if (!users) {
-    return <div>No users available</div>;
+    return (
+      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+        No users available
+      </div>
+    );
   }
 
   return (
@@ -96,6 +121,12 @@ export function UserManagement() {
           </button>
         )}
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/50 text-red-700 dark:text-red-200 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {isCreating && (
         <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
@@ -200,7 +231,6 @@ export function UserManagement() {
                     <button
                       onClick={() => handleDelete(user.username)}
                       className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                      disabled={user.role === 'admin'}
                     >
                       Delete
                     </button>
