@@ -1,6 +1,8 @@
 'use client';
 
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
+import { formatInTimeZone } from 'date-fns-tz';
+import { config } from '@/config';
 
 export function GateController() {
   const { gateStatus, isLoading, isError, mutate } = useGateStatus(true);
@@ -81,7 +83,7 @@ export function GateController() {
                         </span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(entry.timestamp).toLocaleString()}
+                        {formatInTimeZone(entry.timestamp, config.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         {entry.actor}

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
 import { User, CreateUserParams } from '@/types/user';
+import { formatInTimeZone } from 'date-fns-tz';
+import { config } from '@/config';
 
 export function UserManagement() {
   const { users, isLoading, isError, mutate } = useUsers();
@@ -182,7 +184,7 @@ export function UserManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                    {new Date(user.created_at).toLocaleString()}
+                    {formatInTimeZone(user.created_at, config.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                     <button
