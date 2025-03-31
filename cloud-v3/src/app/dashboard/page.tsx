@@ -21,10 +21,10 @@ export default async function DashboardPage() {
         {/* Header */}
         <header className="border-b border-gray-200 dark:border-gray-800">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+            <div className="flex flex-col sm:flex-row justify-center sm:justify-between items-center gap-3 sm:gap-4">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold">Gate Controller</h1>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-sm text-gray-600 dark:text-gray-400">
                   <span>Logged in as:</span>
                   <span className="font-medium">{user.username}</span>
                   <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
