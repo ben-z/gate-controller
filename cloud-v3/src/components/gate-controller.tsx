@@ -64,7 +64,7 @@ export function GateController() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center">
+      <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center items-center">
         <button
           onClick={() => handleGateAction('open')}
           disabled={isLoading || gateStatus.status === 'open'}
