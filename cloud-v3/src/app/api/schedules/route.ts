@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { ensureSession } from '@/lib/auth/ensure-session';
 import { getSchedules, createSchedule, updateSchedule, deleteSchedule } from '@/lib/db';
+import { validateCronExpression, startSchedule, stopSchedule } from '@/lib/scheduler';
 
 // Get all schedules
 export async function GET() {
@@ -36,6 +37,11 @@ export async function POST(request: NextRequest) {
       return new Response('Invalid action', { status: 400 });
     }
 
+    // Validate cron expression
+    if (!validateCronExpression(cron_expression)) {
+      return new Response('Invalid cron expression', { status: 400 });
+    }
+
     // Create schedule
     const newSchedule = createSchedule({
       name,
@@ -44,6 +50,11 @@ export async function POST(request: NextRequest) {
       enabled: enabled ?? true,
       created_by: user.username
     });
+
+    // Start the schedule if enabled
+    if (newSchedule.enabled) {
+      startSchedule(newSchedule);
+    }
 
     return Response.json(newSchedule);
   } catch (error) {
@@ -70,6 +81,11 @@ export async function PUT(request: NextRequest) {
       return new Response('Invalid action', { status: 400 });
     }
 
+    // Validate cron expression if provided
+    if (cron_expression && !validateCronExpression(cron_expression)) {
+      return new Response('Invalid cron expression', { status: 400 });
+    }
+
     // Update schedule
     const updatedSchedule = updateSchedule(id, {
       name,
@@ -77,6 +93,13 @@ export async function PUT(request: NextRequest) {
       action,
       enabled
     });
+
+    // Update the cron job
+    if (updatedSchedule.enabled) {
+      startSchedule(updatedSchedule);
+    } else {
+      stopSchedule(updatedSchedule.id.toString());
+    }
 
     return Response.json(updatedSchedule);
   } catch (error) {
@@ -91,14 +114,17 @@ export async function DELETE(request: NextRequest) {
     // Ensure user is authenticated
     await ensureSession();
 
-    // Get schedule ID from URL
-    const id = parseInt(request.nextUrl.searchParams.get('id') || '0', 10);
+    // Get schedule ID from query params
+    const id = request.nextUrl.searchParams.get('id');
     if (!id) {
       return new Response('Missing schedule ID', { status: 400 });
     }
 
+    // Stop the schedule's cron job
+    stopSchedule(id);
+
     // Delete schedule
-    deleteSchedule(id);
+    deleteSchedule(parseInt(id));
 
     return new Response(null, { status: 204 });
   } catch (error) {
