@@ -1,6 +1,6 @@
 import { CronJob } from 'cron';
 import { Schedule } from '@/types/schedule';
-import { updateGateStatus } from './db';
+import { getSchedule, updateGateStatus } from './db';
 import { config } from '@/config';
 
 // Map to store active cron jobs
@@ -27,13 +27,24 @@ export function validateCronExpression(expression: string): boolean {
  */
 export function startSchedule(schedule: Schedule): void {
   // Stop any existing job for this schedule
-  stopSchedule(schedule.name);
+  if (cronJobs.has(schedule.name)) {
+    stopSchedule(schedule.name);
+  }
 
   const job = new CronJob(
     schedule.cron_expression,
     () => {
-      console.log(`Executing schedule: ${schedule.name}`);
-      updateGateStatus(schedule.action, 'schedule', schedule.name);
+      // Back up solution to stop the job, in case the cron job didn't get stopped in stopSchedule.
+      // This happens in development, when we start the server. The cronJobs variable seems to be dfferent
+      // during initialization and when stopSchedule is called.
+      console.log(`Executing schedule: "${schedule.name}"`);
+      const s = getSchedule(schedule.name);
+      if (!s) {
+        console.error(`Schedule "${schedule.name}" not found in database. Stopping schedule.`);
+        job.stop();
+        return;
+      }
+      updateGateStatus(s.action, "schedule", s.name);
     },
     null, // onComplete
     true, // start
@@ -48,6 +59,7 @@ export function startSchedule(schedule: Schedule): void {
  */
 export function stopSchedule(name: string): void {
   const job = cronJobs.get(name);
+  console.log(`Stopping schedule: "${name}". Found job: ${!!job}. Total number of cron jobs: ${cronJobs.size}`);
   if (job) {
     job.stop();
     cronJobs.delete(name);
