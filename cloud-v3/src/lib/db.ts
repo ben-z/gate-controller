@@ -1,4 +1,4 @@
-import { config } from "@/config";
+import { config, secrets } from "@/config";
 import { GateStatus, HistoryEntry } from "@/types/gate";
 import { Schedule } from "@/types/schedule";
 import { Session } from "@/types/session";
@@ -99,7 +99,7 @@ function bootstrapDB() {
   // Initialize admin account if no users exist
   const userCount = countUsersStmt.get() as { count: number };
   if (userCount.count === 0) {
-    const { username, password } = config.adminCredentials;
+    const { username, password } = secrets.adminCredentials;
     const salt = bcrypt.genSaltSync(10);
     const passwordHash = bcrypt.hashSync(password, salt);
     const now = Date.now();
