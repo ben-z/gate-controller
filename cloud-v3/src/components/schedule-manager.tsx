@@ -5,17 +5,19 @@ import { useSchedules, createSchedule, updateSchedule, deleteSchedule } from '@/
 import cronstrue from 'cronstrue';
 import { Schedule } from '@/types/schedule';
 
+const DEFAULT_FORM_DATA: Partial<Schedule> = Object.freeze({
+  name: '',
+  cron_expression: '',
+  action: 'close',
+  enabled: true
+});
+
 export function ScheduleManager() {
   const { schedules, isLoading, isError, mutate } = useSchedules();
-  const [isCreating, setIsCreating] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Partial<Schedule>>({
-    name: '',
-    cron_expression: '',
-    action: 'close',
-    enabled: true
-  });
+  const [formData, setFormData] = useState<Partial<Schedule>>(DEFAULT_FORM_DATA);
   const [cronError, setCronError] = useState<string | null>(null);
 
   const validateCronExpression = (expression: string): boolean => {
@@ -38,12 +40,7 @@ export function ScheduleManager() {
         await createSchedule(formData as Schedule);
       }
       setEditingName(null);
-      setFormData({
-        name: '',
-        cron_expression: '',
-        action: 'open',
-        enabled: true
-      });
+      setFormData(DEFAULT_FORM_DATA);
       mutate();
     } catch (error) {
       console.error('Failed to save schedule:', error);
@@ -51,6 +48,7 @@ export function ScheduleManager() {
   };
 
   const handleEdit = (schedule: Schedule) => {
+    setIsFormOpen(true);
     setEditingName(schedule.name);
     setFormData({
       name: schedule.name,
@@ -73,14 +71,9 @@ export function ScheduleManager() {
   };
 
   const handleCancel = () => {
-    setIsCreating(false);
+    setIsFormOpen(false);
     setEditingName(null);
-    setFormData({
-      name: '',
-      cron_expression: '',
-      action: 'close',
-      enabled: true,
-    });
+    setFormData(DEFAULT_FORM_DATA);
   };
 
   const handleCronChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,9 +116,9 @@ export function ScheduleManager() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold">Schedule Manager</h2>
-          {!isCreating && (
+          {!isFormOpen && (
             <button
-              onClick={() => setIsCreating(true)}
+              onClick={() => setIsFormOpen(true)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
               Add Schedule
@@ -133,17 +126,29 @@ export function ScheduleManager() {
           )}
         </div>
 
-        {isCreating && (
+        {isFormOpen && (
           <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
             <div>
               <label className="block text-sm font-medium mb-1">Name</label>
               <input
                 type="text"
                 value={formData.name}
+                disabled={!!editingName}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 ${
+                  !!editingName 
+                    ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400' 
+                    : 'border-gray-300 dark:border-gray-700'
+                }`}
                 required
               />
+              {
+                editingName && (
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Schedule name cannot be changed after creation
+                  </p>
+                )
+              }
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Cron Expression</label>
