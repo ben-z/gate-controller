@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { config } from '@/config';
 
-const ADMIN_CREDENTIALS = JSON.parse(process.env.ADMIN_CREDENTIALS!);
-const ADMIN_USERNAME = ADMIN_CREDENTIALS.username;
-const ADMIN_PASSWORD = ADMIN_CREDENTIALS.password;
+const ADMIN_USERNAME = config.adminCredentials.username;
+const ADMIN_PASSWORD = config.adminCredentials.password;
 
 test.describe('Login', () => {
   test.beforeEach(async ({ page }) => {

@@ -4,7 +4,7 @@ import { HistoryEntry, GateStatus } from '@/types/gate';
 import { Schedule } from '@/services/schedule';
 import bcrypt from 'bcrypt';
 import { mkdir } from 'fs/promises';
-
+import { config } from '@/config';
 // Ensure data directory exists
 const dataDir = join(process.cwd(), 'data');
 await mkdir(dataDir, { recursive: true });
@@ -73,23 +73,18 @@ if (gateStatusCount.count === 0) {
 // Initialize admin account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
 if (userCount.count === 0) {
-  const adminCredentials = JSON.parse(process.env.ADMIN_CREDENTIALS || '{}');
-  if (adminCredentials?.username && adminCredentials?.password) {
-    const { username, password } = adminCredentials;
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const now = Date.now();
-    
-    try {
-      db.prepare(`
-        INSERT INTO users (username, password_hash, role, created_at)
-        VALUES (?, ?, 'admin', ?)
-      `).run(username, passwordHash, now);
-    } catch (error) {
-      console.error('Failed to create admin account:', error);
-      // Don't throw here - we want the app to start even if admin creation fails
-    }
-  } else {
-    console.warn('No admin credentials provided in ADMIN_CREDENTIALS environment variable');
+  const { username, password } = config.adminCredentials;
+  const passwordHash = bcrypt.hashSync(password, 10);
+  const now = Date.now();
+  
+  try {
+    db.prepare(`
+      INSERT INTO users (username, password_hash, role, created_at)
+      VALUES (?, ?, 'admin', ?)
+    `).run(username, passwordHash, now);
+  } catch (error) {
+    console.error('Failed to create admin account:', error);
+    // Don't throw here - we want the app to start even if admin creation fails
   }
 }
 
