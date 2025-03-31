@@ -67,12 +67,13 @@ export async function updateSchedule(id: number, updates: Partial<Omit<Schedule,
   return res.json();
 }
 
-export async function deleteSchedule(id: number) {
-  const res = await fetch(`/api/schedules?id=${id}`, {
+export async function deleteSchedule(name: string) {
+  const res = await fetch(`/api/schedules?name=${name}`, {
     method: 'DELETE',
   });
 
   if (!res.ok) {
-    throw new Error('Failed to delete schedule');
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Failed to delete schedule "${name}"`);
   }
 } 

@@ -56,7 +56,7 @@ export function UpcomingSchedules() {
   return (
     <div className="space-y-2">
       {upcoming.map(({ schedule, nextExecution }) => (
-        <div key={schedule.id} className="flex items-center justify-between py-2">
+        <div key={schedule.name} className="flex items-center justify-between py-2">
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${
               schedule.action === 'open' ? 'bg-red-500 dark:bg-red-400' : 'bg-green-500 dark:bg-green-400'

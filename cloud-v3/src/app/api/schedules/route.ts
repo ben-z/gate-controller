@@ -66,69 +66,57 @@ export async function POST(request: NextRequest) {
 // Update schedule
 export async function PUT(request: NextRequest) {
   try {
-    // Ensure user is authenticated
-    await ensureSession();
+    const { searchParams } = new URL(request.url);
+    const name = searchParams.get('name');
 
-    // Get request body
-    const body = await request.json();
-    const { id, name, cron_expression, action, enabled } = body;
-
-    if (!id) {
-      return new Response('Missing schedule ID', { status: 400 });
+    if (!name) {
+      return new Response('Missing schedule name', { status: 400 });
     }
 
-    if (action && action !== 'open' && action !== 'close') {
-      return new Response('Invalid action', { status: 400 });
-    }
-
-    // Validate cron expression if provided
-    if (cron_expression && !validateCronExpression(cron_expression)) {
-      return new Response('Invalid cron expression', { status: 400 });
-    }
+    const updates = await request.json();
 
     // Update schedule
-    const updatedSchedule = updateSchedule(id, {
-      name,
-      cron_expression,
-      action,
-      enabled
-    });
+    const updatedSchedule = updateSchedule(name, updates);
 
-    // Update the cron job
+    // Handle schedule status changes
     if (updatedSchedule.enabled) {
       startSchedule(updatedSchedule);
     } else {
-      stopSchedule(updatedSchedule.id.toString());
+      stopSchedule(name);
     }
 
     return Response.json(updatedSchedule);
   } catch (error) {
     console.error('Error updating schedule:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return new Response('Failed to update schedule', { status: 500 });
   }
 }
 
 // Delete schedule
 export async function DELETE(request: NextRequest) {
   try {
-    // Ensure user is authenticated
-    await ensureSession();
+    const { searchParams } = new URL(request.url);
+    const name = searchParams.get('name');
 
-    // Get schedule ID from query params
-    const id = request.nextUrl.searchParams.get('id');
-    if (!id) {
-      return new Response('Missing schedule ID', { status: 400 });
+    if (!name) {
+      return new Response('Missing schedule name', { status: 400 });
     }
 
     // Stop the schedule's cron job
-    stopSchedule(id);
+    stopSchedule(name);
 
     // Delete schedule
-    deleteSchedule(parseInt(id));
+    deleteSchedule(name);
 
     return new Response(null, { status: 204 });
   } catch (error) {
     console.error('Error deleting schedule:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete schedule';
+    return new Response(JSON.stringify({ error: errorMessage }), { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
 } 

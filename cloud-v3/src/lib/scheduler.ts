@@ -26,10 +26,9 @@ export function validateCronExpression(expression: string): boolean {
  * Starts a schedule's cron job
  */
 export function startSchedule(schedule: Schedule): void {
-  // Stop existing job if it exists
-  stopSchedule(schedule.id.toString());
+  // Stop any existing job for this schedule
+  stopSchedule(schedule.name);
 
-  // Create new cron job
   const job = new CronJob(
     schedule.cron_expression,
     () => {
@@ -41,17 +40,17 @@ export function startSchedule(schedule: Schedule): void {
     config.controllerTimezone // timezone
   );
 
-  cronJobs.set(schedule.id.toString(), job);
+  cronJobs.set(schedule.name, job);
 }
 
 /**
  * Stops a schedule's cron job
  */
-export function stopSchedule(id: string): void {
-  const job = cronJobs.get(id);
+export function stopSchedule(name: string): void {
+  const job = cronJobs.get(name);
   if (job) {
     job.stop();
-    cronJobs.delete(id);
+    cronJobs.delete(name);
   }
 }
 
@@ -76,7 +75,7 @@ export function updateSchedule(schedule: Schedule): void {
   if (schedule.enabled) {
     startSchedule(schedule);
   } else {
-    stopSchedule(schedule.id.toString());
+    stopSchedule(schedule.name);
   }
 }
 
@@ -84,11 +83,11 @@ export function updateSchedule(schedule: Schedule): void {
  * Stops all cron jobs
  */
 export function stopAllSchedules(): void {
-  cronJobs.forEach((job, id) => {
-    console.log(`Stopping schedule: ${id}`);
+  for (const [name, job] of cronJobs.entries()) {
+    console.log(`Stopping schedule: ${name}`);
     job.stop();
-  });
-  cronJobs.clear();
+    cronJobs.delete(name);
+  }
 }
 
 /**

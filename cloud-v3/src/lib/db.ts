@@ -59,14 +59,12 @@ CREATE TABLE IF NOT EXISTS last_contact (
 );
 
 CREATE TABLE IF NOT EXISTS schedules (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
+  name TEXT PRIMARY KEY,
   cron_expression TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('open', 'close')),
-  enabled INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  created_by TEXT NOT NULL,
-  FOREIGN KEY (created_by) REFERENCES users(username)
+  action TEXT NOT NULL CHECK(action IN ('open', 'close')),
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by TEXT
 );
 `);
 
@@ -344,77 +342,78 @@ export function deleteUser(username: string): void {
 const getSchedulesStmt = db.prepare(
   "SELECT * FROM schedules ORDER BY created_at DESC"
 );
-const getScheduleStmt = db.prepare("SELECT * FROM schedules WHERE id = ?");
+
+const getScheduleStmt = db.prepare("SELECT * FROM schedules WHERE name = ?");
 const insertScheduleStmt = db.prepare(`
   INSERT INTO schedules (name, cron_expression, action, enabled, created_at, created_by)
-  VALUES (?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 `);
+
 const updateScheduleStmt = db.prepare(`
-  UPDATE schedules 
-  SET name = ?, cron_expression = ?, action = ?, enabled = ?
-  WHERE id = ?
+  UPDATE schedules
+  SET cron_expression = ?, action = ?, enabled = ?, created_by = ?
+  WHERE name = ?
 `);
-const deleteScheduleStmt = db.prepare("DELETE FROM schedules WHERE id = ?");
+
+const deleteScheduleStmt = db.prepare("DELETE FROM schedules WHERE name = ?");
 
 export function getSchedules(): Schedule[] {
   return getSchedulesStmt.all() as Schedule[];
 }
 
-export function getSchedule(id: number): Schedule | null {
-  const schedule = getScheduleStmt.get(id) as Schedule | undefined;
+export function getSchedule(name: string): Schedule | null {
+  const schedule = getScheduleStmt.get(name) as Schedule | undefined;
   return schedule || null;
 }
 
 export function createSchedule(
-  schedule: Omit<Schedule, "id"> & { created_by: string }
+  schedule: Omit<Schedule, "name"> & { created_by: string; name: string }
 ): Schedule {
-  const now = Date.now();
-
-  const result = insertScheduleStmt.run(
+  insertScheduleStmt.run(
     schedule.name,
     schedule.cron_expression,
     schedule.action,
     schedule.enabled ? 1 : 0,
-    now,
     schedule.created_by
   );
 
   return {
-    id: result.lastInsertRowid as number,
     name: schedule.name,
     cron_expression: schedule.cron_expression,
     action: schedule.action,
     enabled: schedule.enabled,
+    created_by: schedule.created_by
   };
 }
 
 export function updateSchedule(
-  id: number,
-  updates: Partial<Omit<Schedule, "id">>
+  name: string,
+  updates: Partial<Omit<Schedule, "name">>
 ): Schedule {
-  const existing = getSchedule(id);
-  if (!existing) throw new Error(`Schedule not found: ${id}`);
+  const existing = getSchedule(name);
+  if (!existing) throw new Error(`Schedule not found: ${name}`);
 
-  const updated = {
+  const updatedSchedule = {
     ...existing,
     ...updates,
+    name // Keep the original name as it's the primary key
   };
 
   updateScheduleStmt.run(
-    updated.name,
-    updated.cron_expression,
-    updated.action,
-    updated.enabled ? 1 : 0,
-    id
+    updatedSchedule.cron_expression,
+    updatedSchedule.action,
+    updatedSchedule.enabled ? 1 : 0,
+    updatedSchedule.created_by,
+    name
   );
 
-  return updated;
+  return updatedSchedule;
 }
 
-export function deleteSchedule(id: number): void {
-  const result = deleteScheduleStmt.run(id);
+export function deleteSchedule(name: string): void {
+  const result = deleteScheduleStmt.run(name);
   if (result.changes === 0) {
-    throw new Error(`Schedule not found: ${id}`);
+    throw new Error(`Schedule not found: ${name}`);
   }
 }
 
