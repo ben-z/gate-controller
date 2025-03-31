@@ -152,7 +152,7 @@ export function UserManagement() {
       )}
 
       {users && users.length > 0 ? (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-100 dark:bg-gray-800">
               <tr>
