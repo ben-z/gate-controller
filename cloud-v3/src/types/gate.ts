@@ -8,5 +8,5 @@ export type HistoryEntry = {
   action: 'open' | 'close';
   timestamp: number; // Unix timestamp in milliseconds
   actor: 'user' | 'schedule' | 'system';
-  username?: string; // Username for user actions
+  actor_name?: string; // Username for user actions, or schedule name for schedule actions
 }; 

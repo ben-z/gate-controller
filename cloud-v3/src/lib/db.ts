@@ -50,8 +50,7 @@ CREATE TABLE IF NOT EXISTS gate_history (
   action TEXT NOT NULL CHECK(action IN ('open', 'close')),
   timestamp INTEGER NOT NULL,
   actor TEXT NOT NULL CHECK(actor IN ('user', 'schedule', 'system')),
-  username TEXT,
-  FOREIGN KEY (username) REFERENCES users(username)
+  actor_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS last_contact (
@@ -120,10 +119,10 @@ const getLatestHistoryStmt = db.prepare(
   "SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 1"
 );
 const getHistoryStmt = db.prepare(
-  "SELECT action, timestamp, actor, username FROM gate_history ORDER BY timestamp DESC LIMIT 50"
+  "SELECT action, timestamp, actor, actor_name FROM gate_history ORDER BY timestamp DESC LIMIT 50"
 );
 const insertHistoryStmt = db.prepare(
-  "INSERT INTO gate_history (action, timestamp, actor, username) VALUES (?, ?, ?, ?)"
+  "INSERT INTO gate_history (action, timestamp, actor, actor_name) VALUES (?, ?, ?, ?)"
 );
 const countLastContactStmt = db.prepare(
   "SELECT COUNT(*) as count FROM last_contact"
@@ -158,7 +157,7 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
 export function updateGateStatus(
   newAction: "open" | "close",
   actor: "user" | "schedule" | "system" = "user",
-  username?: string
+  actor_name?: string
 ): void {
   const now = Date.now();
 
@@ -167,7 +166,7 @@ export function updateGateStatus(
     newAction,
     now,
     actor,
-    actor === "user" ? username : null
+    actor_name
   );
 }
 

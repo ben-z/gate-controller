@@ -1,6 +1,7 @@
 import { CronJob } from 'cron';
 import { Schedule } from '@/types/schedule';
 import { updateGateStatus } from './db';
+import { config } from '@/config';
 
 // Map to store active cron jobs
 const cronJobs = new Map<string, CronJob>();
@@ -33,11 +34,11 @@ export function startSchedule(schedule: Schedule): void {
     schedule.cron_expression,
     () => {
       console.log(`Executing schedule: ${schedule.name}`);
-      updateGateStatus(schedule.action, 'schedule');
+      updateGateStatus(schedule.action, 'schedule', schedule.name);
     },
     null, // onComplete
     true, // start
-    'UTC' // timezone
+    config.controllerTimezone // timezone
   );
 
   cronJobs.set(schedule.id.toString(), job);
