@@ -67,7 +67,7 @@ test.describe('Login', () => {
     await page.getByRole('button', { name: 'Login' }).click();
 
     // pause for a little bit to ensure the local storage is set
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
 
     // Refresh the page
     await page.reload();
