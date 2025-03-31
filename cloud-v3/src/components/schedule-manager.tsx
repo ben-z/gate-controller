@@ -81,7 +81,7 @@ export function ScheduleManager() {
     setFormData({
       name: '',
       cron_expression: '',
-      action: 'open',
+      action: 'close',
       enabled: true,
     });
   };
@@ -168,8 +168,8 @@ export function ScheduleManager() {
               onChange={(e) => setFormData({ ...formData, action: e.target.value as 'open' | 'close' })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
             >
-              <option value="open">Open</option>
               <option value="close">Close</option>
+              <option value="open">Open</option>
             </select>
           </div>
           <div className="flex items-center">
