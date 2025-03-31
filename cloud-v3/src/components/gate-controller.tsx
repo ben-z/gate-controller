@@ -52,8 +52,8 @@ export function GateController() {
             {gateStatus.status.toUpperCase()}
           </span>
         </div>
-        <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-          <span>Last contact with gate:</span>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          <span>Last gate sync: </span>
           <span className="font-medium">
             <TimeDisplay 
               timestamp={gateStatus.lastContactTimestamp} 
