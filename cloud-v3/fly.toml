@@ -11,10 +11,7 @@ primary_region = 'sea'
 [[mounts]]
   source = 'data'
   destination = '/data'
-  auto_extend_size_threshold = 80
   initial_size = '1GB'
-  auto_extend_size_increment = '1GB'
-  auto_extend_size_limit = '1GB'
 
 [http_service]
   internal_port = 3000
