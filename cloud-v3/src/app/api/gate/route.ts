@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     await ensureSession();
 
     // Get URL parameters
-    const includeHistory = request.nextUrl.searchParams.get('includeHistory') === 'true';
+    const includeHistory = request.nextUrl.searchParams.get('history') === 'true';
 
     // Get gate status
     const status = getGateStatus(includeHistory);
