@@ -364,7 +364,7 @@ export function getSchedule(id: number): Schedule | null {
 }
 
 export function createSchedule(
-  schedule: Omit<Schedule, "id"> & { created_by: number }
+  schedule: Omit<Schedule, "id"> & { created_by: string }
 ): Schedule {
   const now = Date.now();
 
