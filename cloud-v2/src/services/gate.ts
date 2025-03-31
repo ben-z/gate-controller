@@ -1,16 +1,8 @@
 import { GateStatus } from '@/types/gate';
 import * as db from './db';
 
-// Runtime variable to track last contact with the gate agent
-// Initialize to 0 to represent no contact yet
-let lastContactTimestamp = 0;
-
 export async function getGateStatus(includeHistory: boolean = false): Promise<GateStatus> {
-  const status = await db.getGateStatus(includeHistory);
-  return {
-    ...status,
-    lastContactTimestamp
-  };
+  return db.getGateStatus(includeHistory);
 }
 
 export async function updateGateStatus(
@@ -26,5 +18,5 @@ export async function updateGateStatus(
 }
 
 export async function updateLastContact(): Promise<void> {
-  lastContactTimestamp = Date.now();
+  return db.updateLastContact();
 } 

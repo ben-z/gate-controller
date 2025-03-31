@@ -29,7 +29,7 @@ export async function POST(request: Request) {
           'Expires': '0',
         },
       });
-    } catch {
+    } catch (error) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
   }

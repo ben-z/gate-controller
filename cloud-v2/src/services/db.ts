@@ -35,12 +35,17 @@ db.exec(`
     FOREIGN KEY (username) REFERENCES users(username)
   );
 
+  CREATE TABLE IF NOT EXISTS last_contact (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cron_expression TEXT NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('open', 'close')),
-    is_active INTEGER NOT NULL DEFAULT 1,
+    enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
     created_by INTEGER NOT NULL,
     FOREIGN KEY (created_by) REFERENCES users(id)
@@ -59,6 +64,15 @@ if (gateHistoryCount.count === 0) {
   db.exec(`
     INSERT INTO gate_history (action, timestamp, actor) 
     VALUES ('close', ${Date.now()}, 'system');
+  `);
+}
+
+// Initialize last contact if it doesn't exist
+const lastContactCount = db.prepare('SELECT COUNT(*) as count FROM last_contact').get() as { count: number };
+if (lastContactCount.count === 0) {
+  db.exec(`
+    INSERT INTO last_contact (id, timestamp) 
+    VALUES (1, 0);
   `);
 }
 
@@ -82,19 +96,21 @@ if (userCount.count === 0) {
 
 // Prepare statements for better performance
 const getLatestHistoryStmt = db.prepare('SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 1');
-const getHistoryStmt = db.prepare('SELECT action, timestamp, actor, username FROM gate_history ORDER BY timestamp DESC LIMIT 10');
+const getHistoryStmt = db.prepare('SELECT action, timestamp, actor, username FROM gate_history ORDER BY timestamp DESC LIMIT 50');
 const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor, username) VALUES (?, ?, ?, ?)');
+const getLastContactStmt = db.prepare('SELECT timestamp FROM last_contact WHERE id = 1');
+const updateLastContactStmt = db.prepare('UPDATE last_contact SET timestamp = ? WHERE id = 1');
 
 // Schedule statements
 const getSchedulesStmt = db.prepare('SELECT * FROM schedules ORDER BY created_at DESC');
 const getScheduleStmt = db.prepare('SELECT * FROM schedules WHERE id = ?');
 const insertScheduleStmt = db.prepare(`
-  INSERT INTO schedules (name, cron_expression, action, is_active, created_at, created_by)
+  INSERT INTO schedules (name, cron_expression, action, enabled, created_at, created_by)
   VALUES (?, ?, ?, ?, ?, ?)
 `);
 const updateScheduleStmt = db.prepare(`
   UPDATE schedules 
-  SET name = ?, cron_expression = ?, action = ?, is_active = ?
+  SET name = ?, cron_expression = ?, action = ?, enabled = ?
   WHERE id = ?
 `);
 const deleteScheduleStmt = db.prepare('DELETE FROM schedules WHERE id = ?');
@@ -105,9 +121,11 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
     timestamp: number;
   };
 
+  const lastContact = getLastContactStmt.get() as { timestamp: number };
+
   const result: GateStatus = { 
     status: latest.action === 'open' ? 'open' : 'closed',
-    lastContactTimestamp: 0 // Default value, will be overridden by gate service
+    lastContactTimestamp: lastContact.timestamp
   };
   
   if (includeHistory) {
@@ -125,6 +143,10 @@ export function updateGateStatus(newAction: 'open' | 'close', includeHistory: bo
   
   // Get updated state
   return getGateStatus(includeHistory);
+}
+
+export function updateLastContact(): void {
+  updateLastContactStmt.run(Date.now());
 }
 
 // Schedule functions

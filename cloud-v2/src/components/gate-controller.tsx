@@ -63,11 +63,7 @@ export function TimeDisplay({
   );
 }
 
-interface GateControllerProps {
-  initialData: GateStatus;
-}
-
-export function GateController({ initialData }: GateControllerProps) {
+export function GateController() {
   const { username } = useAuth();
   const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
   const [isLoading, setIsLoading] = useState(false);
@@ -103,15 +99,9 @@ export function GateController({ initialData }: GateControllerProps) {
       revalidateOnFocus: true, // Revalidate when window gets focused
       revalidateOnReconnect: true, // Revalidate when browser regains network connection
       dedupingInterval: 1000, // Dedupe requests within 1 second
-      fallbackData: initialData, // Use initialData as fallback during SSR
       keepPreviousData: true, // Keep showing the old data while fetching
     }
   );
-
-  // Add a debug effect to verify refresh is working
-  useEffect(() => {
-    console.log('Gate status updated:', data?.status, new Date().toISOString());
-  }, [data?.status]);
 
   const updateGateStatus = async (newAction: 'open' | 'close') => {
     setIsLoading(true);
@@ -123,8 +113,13 @@ export function GateController({ initialData }: GateControllerProps) {
         },
         body: JSON.stringify({ action: newAction, username }),
       });
+      const responseStatus = response.status;
+      if (responseStatus !== 200) {
+        throw new Error(`Failed to update gate status: ${responseStatus}, ${response.statusText}`);
+      }
       const data = await response.json();
-      await mutate(data, false); // Update the cache with new data
+      await mutate(data); // Update the cache with new data
+      console.log('data mutated', data);
     } catch (error) {
       console.error('Error updating gate status:', error);
     }
@@ -137,6 +132,8 @@ export function GateController({ initialData }: GateControllerProps) {
   }
 
   const { status, history = [], lastContactTimestamp } = data;
+
+  console.log('data', data);
 
   return (
     <>

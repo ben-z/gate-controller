@@ -5,15 +5,10 @@ import { ScheduleManager } from '@/components/schedule-manager';
 import { LoginForm } from '@/components/login-form';
 import { UserManagement } from '@/components/user-management';
 import { useAuth } from '@/contexts/auth-context';
-import { GateStatus } from '@/types/gate';
 import { User } from '@/services/users';
 import { useState, useEffect } from 'react';
 
-interface ClientPageProps {
-  initialData: GateStatus;
-}
-
-export function ClientPage({ initialData }: ClientPageProps) {
+export function ClientPage() {
   const { isAuthenticated, isLoading, username, role, currentPassword, logout } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -139,7 +134,7 @@ export function ClientPage({ initialData }: ClientPageProps) {
           </span>
         </div>
 
-        <GateController initialData={initialData} />
+        <GateController />
         <ScheduleManager />
         {!isLoadingUsers && role === 'admin' && (
           <UserManagement
