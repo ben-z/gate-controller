@@ -7,7 +7,7 @@ const ADMIN_PASSWORD = ADMIN_CREDENTIALS.password;
 test.describe('Login', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the home page before each test
-    await page.goto('http://localhost:3001');
+    await page.goto('/');
   });
   test.afterEach(async ({ page }) => {
     // Clear local storage after each test

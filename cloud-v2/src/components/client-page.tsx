@@ -132,9 +132,9 @@ export function ClientPage({ initialData }: ClientPageProps) {
         {/* Add user info display */}
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <span>Logged in as:</span>
-          <span className="font-medium">{username}</span>
+          <span className="font-medium" data-testid="user-info-username">{username}</span>
           <span className="text-gray-400 dark:text-gray-500">·</span>
-          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" data-testid="user-info-role">
             {role}
           </span>
         </div>

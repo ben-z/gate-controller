@@ -134,12 +134,13 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
       )}
 
       {isCreating && (
-        <form onSubmit={handleCreate} className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <form onSubmit={handleCreate} className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg" data-testid="create-user-form">
           <h3 className="text-lg font-medium mb-4">Create New User</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Username</label>
+              <label className="block text-sm font-medium mb-1" htmlFor="username">Username</label>
               <input
+                id="username"
                 type="text"
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
@@ -148,8 +149,9 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+              <label className="block text-sm font-medium mb-1" htmlFor="password">Password</label>
               <input
+                id="password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -158,8 +160,9 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Role</label>
+              <label className="block text-sm font-medium mb-1" htmlFor="role">Role</label>
               <select
+                id="role"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value as 'admin' | 'user')}
                 className="w-full px-3 py-2 border rounded-lg"
@@ -190,7 +193,7 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
         </form>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4" data-testid="user-list">
         {users.map((user) => {
           const isInitialAdmin = user.created_by === null;
           const isCurrentUser = user.username === currentUser;
@@ -203,7 +206,7 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
               className="p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700"
             >
               {editingUser?.id === user.id ? (
-                <form onSubmit={handleUpdate} className="space-y-4">
+                <form onSubmit={handleUpdate} className="space-y-4" data-testid="edit-user-form">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium">Edit User: {user.username}</h3>
                     <button
@@ -219,8 +222,9 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Password</label>
+                      <label className="block text-sm font-medium mb-1" htmlFor="password">Password</label>
                       <input
+                        id="password"
                         type="password"
                         value={editPassword}
                         onChange={(e) => setEditPassword(e.target.value)}
@@ -229,8 +233,9 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Role</label>
+                      <label className="block text-sm font-medium mb-1" htmlFor="role">Role</label>
                       <select
+                        id="role"
                         value={editRole}
                         onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
                         className="w-full px-3 py-2 border rounded-lg"
@@ -251,8 +256,8 @@ export function UserManagement({ users, onUserCreate, onUserUpdate, onUserDelete
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-medium">{user.username}</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                      <h3 className="text-lg font-medium" data-testid="user-username">{user.username}</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" data-testid="user-role">
                         {user.role}
                       </span>
                     </div>
