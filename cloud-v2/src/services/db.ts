@@ -1,16 +1,15 @@
-import Database from 'better-sqlite3';
-import { join } from 'path';
-import { HistoryEntry, GateStatus } from '@/types/gate';
-import { Schedule } from '@/services/schedule';
-import bcrypt from 'bcrypt';
-import { mkdir } from 'fs/promises';
 import { config } from '@/config';
-// Ensure data directory exists
-const dataDir = join(process.cwd(), 'data');
-await mkdir(dataDir, { recursive: true });
+import { Schedule } from '@/services/schedule';
+import { GateStatus, HistoryEntry } from '@/types/gate';
+import bcrypt from 'bcrypt';
+import Database from 'better-sqlite3';
+import { mkdir } from 'fs/promises';
+import path from 'path';
 
-const dbPath = join(dataDir, 'gate.db');
-const db = new Database(dbPath);
+// Ensure data directory exists
+await mkdir(path.dirname(config.dbPath), { recursive: true });
+
+const db = new Database(config.dbPath);
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');

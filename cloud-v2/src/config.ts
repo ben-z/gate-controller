@@ -6,7 +6,9 @@ export const config: {
     username: string;
     password: string;
   };
+  dbPath: string;
 } = {
   controllerTimezone: process.env.NEXT_PUBLIC_CONTROLLER_TIMEZONE || 'UTC',
-  adminCredentials: JSON.parse(process.env.ADMIN_CREDENTIALS || '{"username":"admin","password":"replace_me"}')
+  adminCredentials: JSON.parse(process.env.ADMIN_CREDENTIALS || '{"username":"admin","password":"replace_me"}'),
+  dbPath: process.env.DB_PATH || 'data/gate.db'
 } as const; 
