@@ -1,138 +1,153 @@
-import { CronJob } from 'cron';
-import { Schedule } from '@/types/schedule';
-import { getSchedule, updateGateStatus } from './db';
-import { config } from '@/config';
+import { config } from "@/config";
+import { Schedule } from "@/types/schedule";
+import { Queue, QueueEvents, Worker } from "bullmq";
+import cronstrue from "cronstrue";
+import { getSchedule, updateGateStatus } from "./db";
 
-// Map to store active cron jobs
-const cronJobs = new Map<string, CronJob>();
+const REDIS_CONNECTION_CONFIG = {
+  host: config.redis.host,
+  port: config.redis.port,
+  password: config.redis.password,
+};
+
+// Create a queue for gate control jobs
+const gateQueue = new Queue("gate-control", {
+  connection: REDIS_CONNECTION_CONFIG,
+});
+
+// Create a worker to process the jobs
+new Worker(
+  gateQueue.name,
+  async (job) => {
+    console.log(`Executing schedule: ${job.data.scheduleName}`);
+
+    // Here we fetch the schedule from the database again to be extra sure that the job is valid.
+    const schedule = await getSchedule(job.data.scheduleName);
+    if (!schedule) {
+      throw new Error(
+        `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
+      );
+    }
+    if (schedule.action !== job.data.action) {
+      throw new Error(
+        `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
+      );
+    }
+    await updateGateStatus(schedule.action, "schedule", schedule.name);
+  },
+  {
+    connection: REDIS_CONNECTION_CONFIG,
+  }
+);
+
+// Create queue events listener
+const queueEvents = new QueueEvents(gateQueue.name, {
+  connection: REDIS_CONNECTION_CONFIG,
+});
+
+// Log failed jobs
+queueEvents.on("failed", ({ jobId, failedReason }) => {
+  console.error(`Job ${jobId} failed:`, failedReason);
+});
 
 /**
  * Validates a cron expression
  */
 export function validateCronExpression(expression: string): boolean {
   try {
-    // Create a test job with a dummy function
-    const job = new CronJob(expression, () => {}, null, true);
-    // If we get here, the expression is valid
-    job.stop();
+    cronstrue.toString(expression);
     return true;
   } catch (error) {
-    console.error('Invalid cron expression:', error);
+    console.error("Invalid cron expression:", error);
     return false;
   }
 }
 
 /**
- * Starts a schedule's cron job
+ * Starts a schedule's job
  */
-export function startSchedule(schedule: Schedule): void {
-  // Stop any existing job for this schedule
-  if (cronJobs.has(schedule.name)) {
-    stopSchedule(schedule.name);
-  }
+export async function startSchedule(schedule: Schedule): Promise<void> {
+  console.log(`Starting schedule: ${schedule.name}`);
 
-  const job = new CronJob(
-    schedule.cron_expression,
-    () => {
-      // Back up solution to stop the job, in case the cron job didn't get stopped in stopSchedule.
-      // This happens in development, when we start the server. The cronJobs variable seems to be dfferent
-      // during initialization and when stopSchedule is called.
-      console.log(`Executing schedule: "${schedule.name}"`);
-      const s = getSchedule(schedule.name);
-      if (!s) {
-        console.error(`Schedule "${schedule.name}" not found in database. Stopping schedule.`);
-        job.stop();
-        return;
-      }
-      updateGateStatus(s.action, "schedule", s.name);
+  // Create or update the job scheduler
+  await gateQueue.upsertJobScheduler(
+    `schedule-${schedule.name}`,
+    {
+      pattern: schedule.cron_expression,
+      tz: config.controllerTimezone,
     },
-    null, // onComplete
-    true, // start
-    config.controllerTimezone // timezone
+    {
+      name: schedule.name,
+      data: { scheduleName: schedule.name, action: schedule.action },
+      opts: {
+        removeOnComplete: true,
+        removeOnFail: 1000, // Keep failed jobs for 1000ms
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 1000,
+        },
+      },
+    }
   );
-
-  cronJobs.set(schedule.name, job);
 }
 
 /**
- * Stops a schedule's cron job
+ * Stops a schedule's job
  */
-export function stopSchedule(name: string): void {
-  const job = cronJobs.get(name);
-  console.log(`Stopping schedule: "${name}". Found job: ${!!job}. Total number of cron jobs: ${cronJobs.size}`);
-  if (job) {
-    job.stop();
-    cronJobs.delete(name);
-  }
+export async function stopSchedule(name: string): Promise<void> {
+  console.log(`Stopping schedule: ${name}`);
+  await gateQueue.removeJobScheduler(`schedule-${name}`);
 }
 
 /**
  * Initializes all enabled schedules from the database
  */
-export function initializeSchedules(schedules: Schedule[]): void {
+export async function initializeSchedules(
+  schedules: Schedule[]
+): Promise<void> {
   console.log(`Initializing ${schedules.length} schedules...`);
-  
-  schedules.forEach(schedule => {
+
+  for (const schedule of schedules) {
     if (schedule.enabled) {
-      console.log(`Starting schedule: ${schedule.name}`);
-      startSchedule(schedule);
+      await startSchedule(schedule);
     }
-  });
+  }
 }
 
 /**
- * Updates a schedule's cron job
+ * Updates a schedule's job
  */
-export function updateSchedule(schedule: Schedule): void {
+export async function updateSchedule(schedule: Schedule): Promise<void> {
   if (schedule.enabled) {
-    startSchedule(schedule);
+    await startSchedule(schedule);
   } else {
-    stopSchedule(schedule.name);
-  }
-}
-
-/**
- * Stops all cron jobs
- */
-export function stopAllSchedules(): void {
-  for (const [name, job] of cronJobs.entries()) {
-    console.log(`Stopping schedule: ${name}`);
-    job.stop();
-    cronJobs.delete(name);
-  }
-}
-
-/**
- * Gets the next execution time for a cron expression
- */
-export function getNextExecutionTime(expression: string): Date | null {
-  try {
-    const job = new CronJob(expression, () => {}, null, true, config.controllerTimezone);
-    const nextDate = job.nextDate();
-    job.stop();
-    return nextDate.toJSDate();
-  } catch (error) {
-    console.error('Error getting next execution time:', error);
-    return null;
+    await stopSchedule(schedule.name);
   }
 }
 
 /**
  * Gets upcoming schedule executions
  */
-export function getUpcomingSchedules(schedules: Schedule[], count: number = 5): Array<{ schedule: Schedule; nextExecution: Date }> {
-  const now = new Date();
-  const upcoming = schedules
-    .filter(schedule => schedule.enabled)
-    .map(schedule => ({
+export async function getUpcomingSchedules(
+  schedules: Schedule[]
+): Promise<Array<{ schedule: Schedule; nextExecution: Date }>> {
+  const delayedJobs = await gateQueue.getDelayed();
+
+  const upcoming = delayedJobs.map((job) => {
+    const scheduleName = job.data.scheduleName;
+    const nextExecution = job.opts.timestamp + job.opts.delay;
+    const schedule = schedules.find((s) => s.name === scheduleName);
+
+    if (!schedule) {
+      throw new Error(`Schedule "${scheduleName}" not found`);
+    }
+
+    return {
       schedule,
-      nextExecution: getNextExecutionTime(schedule.cron_expression)
-    }))
-    .filter((item): item is { schedule: Schedule; nextExecution: Date } => 
-      item.nextExecution !== null && item.nextExecution > now
-    )
-    .sort((a, b) => a.nextExecution.getTime() - b.nextExecution.getTime())
-    .slice(0, count);
+      nextExecution,
+    };
+  });
 
   return upcoming;
-} 
+}

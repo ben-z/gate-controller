@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     // Start the schedule if enabled
     if (newSchedule.enabled) {
-      startSchedule(newSchedule);
+      await startSchedule(newSchedule);
     }
 
     return Response.json(newSchedule);

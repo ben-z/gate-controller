@@ -5,7 +5,7 @@ import { getSchedules } from '@/lib/db';
 export async function GET() {
   try {
     const schedules = await getSchedules();
-    const upcoming = getUpcomingSchedules(schedules);
+    const upcoming = await getUpcomingSchedules(schedules);
     return NextResponse.json(upcoming);
   } catch (error) {
     console.error('Error getting upcoming schedules:', error);

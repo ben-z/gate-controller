@@ -8,7 +8,7 @@ export async function getInitialData() {
     getUsers(),
   ]);
 
-  const upcomingSchedules = getUpcomingSchedules(schedules);
+  const upcomingSchedules = await getUpcomingSchedules(schedules);
 
   return {
     gateStatus,

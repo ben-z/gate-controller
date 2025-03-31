@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:redis": "redis-memory-server",
+    "dev:all": "concurrently \"npm run dev:redis\" \"npm run dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -11,7 +13,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^11.9.1",
-    "cron": "^4.1.3",
+    "bullmq": "^5.45.2",
     "cronstrue": "^2.57.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
@@ -25,12 +27,13 @@
     "@flydotio/dockerfile": "^0.7.9",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.12",
-    "@types/cron": "^2.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.1.2",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
+    "redis-memory-server": "^0.12.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
