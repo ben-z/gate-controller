@@ -33,8 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
   created_at INTEGER NOT NULL,
-  created_by TEXT,
-  FOREIGN KEY (created_by) REFERENCES users(username)
+  created_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -204,6 +203,9 @@ const getSessionStmt = db.prepare(
 const deleteSessionStmt = db.prepare(
   "DELETE FROM sessions WHERE session_key = ?"
 );
+const deleteSessionsByUsernameStmt = db.prepare(
+  "DELETE FROM sessions WHERE username = ?"
+);
 
 export function getUsers(): User[] {
   return (getUsersStmt.all() as User[]).map((user) => ({
@@ -335,6 +337,9 @@ export function updateUser(user: UpdateUserParams): void {
 }
 
 export function deleteUser(username: string): void {
+  // Clear sessions for this user
+  deleteSessionsByUsernameStmt.run(username);
+
   deleteUserStmt.run(username);
 }
 

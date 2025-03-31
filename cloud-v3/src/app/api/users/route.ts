@@ -108,7 +108,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete user
-    deleteUser(username);
+    try {
+      deleteUser(username);
+    } catch (error) {
+      if (error instanceof ReferenceError) {
+        return new Response(error.message, { status: 400 });
+      }
+      throw error;
+    }
 
     return new Response(null, { status: 204 });
   } catch (error) {
