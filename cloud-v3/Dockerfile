@@ -59,8 +59,7 @@ ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
 COPY redis.conf ${REDIS_CONFIG_FILE}
 
 # Entrypoint sets up the container.
-# ENTRYPOINT [ "/app/docker-entrypoint.js" ]
-ENTRYPOINT [ "/usr/bin/bash" ]
+ENTRYPOINT [ "/usr/local/bin/npm" ]
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
@@ -70,4 +69,4 @@ ENV REDIS_HOST='localhost'
 ENV REDIS_PORT='6379'
 # Also set ADMIN_CREDENTIALS via `fly secrets set ADMIN_CREDENTIALS=...`
 
-CMD [ "npm", "run", "prod:all" ]
+CMD [ "run", "prod:all" ]
