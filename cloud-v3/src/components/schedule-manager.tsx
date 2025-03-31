@@ -12,7 +12,7 @@ export function ScheduleManager() {
   const [formData, setFormData] = useState({
     name: '',
     cron_expression: '',
-    action: 'open' as 'open' | 'close',
+    action: 'close' as 'open' | 'close',
     enabled: true,
   });
   const [cronError, setCronError] = useState<string | null>(null);

@@ -239,8 +239,6 @@ export async function authenticateUser(
     | undefined;
   if (!user) return null;
 
-  console.log("user", user);
-
   if (await bcrypt.compare(password, user.password_hash)) {
     const sessionKey = crypto.randomBytes(32).toString("hex");
     insertSessionStmt.run(
@@ -330,7 +328,12 @@ export function createUser(user: CreateUserParams): User {
 }
 
 export function updateUser(user: UpdateUserParams): void {
-  updateUserStmt.run(user.password, user.role, user.username);
+  const existing = getUserByUsernameStmt.get(user.username) as (User & UserCredentials) | undefined;
+  if (!existing) throw new Error(`User not found: ${user.username}`);
+
+  const passwordHash = user.password ? bcrypt.hashSync(user.password, bcrypt.genSaltSync(10)) : existing.password_hash;
+
+  updateUserStmt.run(passwordHash, user.role, user.username);
 }
 
 export function deleteUser(username: string): void {
