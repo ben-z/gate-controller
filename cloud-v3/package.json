@@ -1,0 +1,42 @@
+{
+  "name": "cloud-v3",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "dev:redis": "redis-memory-server",
+    "dev:all": "concurrently --kill-others \"npm run dev:redis\" \"npm run dev\"",
+    "build": "next build",
+    "start": "next start",
+    "prod:redis": "mkdir -p /data/redis && redis-server ${REDIS_CONFIG_FILE} --daemonize yes",
+    "prod:all": "npm run prod:redis && npm run start -- -H 0.0.0.0",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^11.9.1",
+    "bullmq": "^5.45.2",
+    "cronstrue": "^2.57.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "next": "^15.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "swr": "^2.3.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@flydotio/dockerfile": "^0.7.9",
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.1.2",
+    "eslint": "^9",
+    "eslint-config-next": "15.2.4",
+    "redis-memory-server": "^0.12.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
