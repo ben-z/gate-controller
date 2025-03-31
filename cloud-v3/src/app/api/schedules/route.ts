@@ -15,7 +15,13 @@ export async function GET() {
     return Response.json(schedules);
   } catch (error) {
     console.error('Error getting schedules:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get schedules';
+    return new Response(JSON.stringify({ error: errorMessage }), { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
 }
 
@@ -30,16 +36,31 @@ export async function POST(request: NextRequest) {
     const { name, cron_expression, action, enabled } = body;
 
     if (!name || !cron_expression || !action) {
-      return new Response('Missing required fields', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     if (action !== 'open' && action !== 'close') {
-      return new Response('Invalid action', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Invalid action' }), { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     // Validate cron expression
     if (!validateCronExpression(cron_expression)) {
-      return new Response('Invalid cron expression', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Invalid cron expression' }), { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     // Create schedule
@@ -59,7 +80,13 @@ export async function POST(request: NextRequest) {
     return Response.json(newSchedule);
   } catch (error) {
     console.error('Error creating schedule:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create schedule';
+    return new Response(JSON.stringify({ error: errorMessage }), { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
 }
 
@@ -70,7 +97,12 @@ export async function PUT(request: NextRequest) {
     const name = searchParams.get('name');
 
     if (!name) {
-      return new Response('Missing schedule name', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Missing schedule name' }), { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     const updates = await request.json();
@@ -88,7 +120,13 @@ export async function PUT(request: NextRequest) {
     return Response.json(updatedSchedule);
   } catch (error) {
     console.error('Error updating schedule:', error);
-    return new Response('Failed to update schedule', { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update schedule';
+    return new Response(JSON.stringify({ error: errorMessage }), { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
 }
 
@@ -99,7 +137,12 @@ export async function DELETE(request: NextRequest) {
     const name = searchParams.get('name');
 
     if (!name) {
-      return new Response('Missing schedule name', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Missing schedule name' }), { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     // Stop the schedule's cron job

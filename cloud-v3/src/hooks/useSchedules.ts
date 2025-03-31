@@ -20,9 +20,9 @@ export function useSchedules() {
   };
 }
 
-export function useSchedule(id: number) {
+export function useSchedule(name: string) {
   const { data, error, isLoading, mutate } = useSWR<Schedule>(
-    id ? `/api/schedules/${id}` : null,
+    name ? `/api/schedules?name=${name}` : null,
     fetcher
   );
 
@@ -35,7 +35,7 @@ export function useSchedule(id: number) {
 }
 
 // Helper functions for mutations
-export async function createSchedule(schedule: Omit<Schedule, 'id'>) {
+export async function createSchedule(schedule: Omit<Schedule, 'name'>) {
   const res = await fetch('/api/schedules', {
     method: 'POST',
     headers: {
@@ -45,23 +45,25 @@ export async function createSchedule(schedule: Omit<Schedule, 'id'>) {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to create schedule');
+    const errorData = await res.json();
+    throw new Error(errorData.error || 'Failed to create schedule');
   }
 
   return res.json();
 }
 
-export async function updateSchedule(id: number, updates: Partial<Omit<Schedule, 'id'>>) {
-  const res = await fetch(`/api/schedules`, {
+export async function updateSchedule(name: string, updates: Partial<Omit<Schedule, 'name'>>) {
+  const res = await fetch(`/api/schedules?name=${name}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ id, ...updates }),
+    body: JSON.stringify(updates),
   });
 
   if (!res.ok) {
-    throw new Error('Failed to update schedule');
+    const errorData = await res.json();
+    throw new Error(errorData.error || `Failed to update schedule "${name}"`);
   }
 
   return res.json();
