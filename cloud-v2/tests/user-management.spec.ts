@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ADMIN_CREDENTIALS = JSON.parse(process.env.AUTH_CREDENTIALS!);
+const ADMIN_CREDENTIALS = JSON.parse(process.env.ADMIN_CREDENTIALS!);
 const ADMIN_USERNAME = ADMIN_CREDENTIALS.username;
 const ADMIN_PASSWORD = ADMIN_CREDENTIALS.password;
 
