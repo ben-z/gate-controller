@@ -55,7 +55,6 @@ RUN mkdir -p /data
 VOLUME /data
 
 # Set up redis
-RUN mkdir -p /data/redis
 ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
 COPY redis.conf ${REDIS_CONFIG_FILE}
 
