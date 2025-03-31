@@ -59,7 +59,8 @@ ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
 COPY redis.conf ${REDIS_CONFIG_FILE}
 
 # Entrypoint sets up the container.
-ENTRYPOINT [ "/app/docker-entrypoint.js" ]
+# ENTRYPOINT [ "/app/docker-entrypoint.js" ]
+ENTRYPOINT [ "/usr/bin/bash" ]
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
