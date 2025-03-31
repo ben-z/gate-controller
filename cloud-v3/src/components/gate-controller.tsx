@@ -1,18 +1,32 @@
 'use client';
 
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
-import { formatInTimeZone } from 'date-fns-tz';
+import { TimeDisplay, TimeFormat } from '@/components/time-display';
 import { config } from '@/config';
+import { useState, useEffect } from 'react';
 
 export function GateController() {
   const { gateStatus, isLoading, isError, mutate } = useGateStatus(true);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
 
-  const handleAction = async (action: 'open' | 'close') => {
+  // Initialize time format from localStorage if available
+  useEffect(() => {
+    const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
+    setTimeFormat(savedFormat || 'controller');
+  }, []);
+
+  // Save time format preference to localStorage
+  const handleTimeFormatChange = (format: TimeFormat) => {
+    setTimeFormat(format);
+    localStorage.setItem('timeFormat', format);
+  };
+
+  const handleGateAction = async (action: 'open' | 'close') => {
     try {
       await updateGateStatus(action);
-      await mutate(); // Revalidate the data
+      await mutate();
     } catch (error) {
-      console.error('Failed to update gate status:', error);
+      console.error('Error updating gate status:', error);
     }
   };
 
@@ -30,32 +44,55 @@ export function GateController() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-semibold mb-1">Gate Control</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Current Status: <span className="font-medium">{gateStatus.status}</span>
-          </p>
+      <div className="text-xl flex flex-col items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span>Current Status:</span>
+          <span className={`font-bold ${gateStatus.status === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
+            {gateStatus.status.toUpperCase()}
+          </span>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleAction('open')}
-            disabled={gateStatus.status === 'open'}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Open Gate
-          </button>
-          <button
-            onClick={() => handleAction('close')}
-            disabled={gateStatus.status === 'closed'}
-            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Close Gate
-          </button>
+        <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+          <span>Last contact with gate:</span>
+          <span className="font-medium">
+            <TimeDisplay 
+              timestamp={gateStatus.lastContactTimestamp} 
+              format="relative" 
+              className={gateStatus.lastContactTimestamp === 0 || Date.now() - gateStatus.lastContactTimestamp > 60000 ? "text-red-500 dark:text-red-400" : ""} 
+            />
+          </span>
         </div>
       </div>
 
-      {/* Recent Activity */}
+      <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center">
+        <button
+          onClick={() => handleGateAction('open')}
+          disabled={isLoading || gateStatus.status === 'open'}
+          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
+            isLoading || gateStatus.status === 'open'
+              ? 'bg-gray-400 dark:bg-gray-600'
+              : 'bg-red-500 active:bg-red-600 dark:bg-red-600 dark:active:bg-red-700'
+          }`}
+        >
+          Open Gate
+        </button>
+
+        <button
+          onClick={() => handleGateAction('close')}
+          disabled={isLoading || gateStatus.status === 'closed'}
+          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
+            isLoading || gateStatus.status === 'closed'
+              ? 'bg-gray-400 dark:bg-gray-600'
+              : 'bg-green-500 active:bg-green-600 dark:bg-green-600 dark:active:bg-green-700'
+          }`}
+        >
+          Close Gate
+        </button>
+      </div>
+
+      <div className="h-6 mt-4 text-gray-600 dark:text-gray-400">
+        {isLoading && "Updating gate status..."}
+      </div>
+
       {gateStatus.history && (
         <div>
           <h3 className="text-lg font-medium mb-3">Recent Activity</h3>
@@ -65,9 +102,22 @@ export function GateController() {
                 <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <div className="flex items-center gap-2">
+                        Time
+                        <select 
+                          value={timeFormat}
+                          onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
+                          className="text-xs bg-transparent border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                          title={`Select time format (Controller timezone: ${config.controllerTimezone})`}
+                        >
+                          <option value="relative">Relative</option>
+                          <option value="controller">Controller</option>
+                        </select>
+                      </div>
+                    </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actor</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -83,7 +133,10 @@ export function GateController() {
                         </span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                        {formatInTimeZone(entry.timestamp, config.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
+                        <TimeDisplay
+                          timestamp={entry.timestamp}
+                          format={timeFormat === 'relative' ? 'relative' : config.controllerTimezone}
+                        />
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         {entry.actor}
