@@ -7,6 +7,6 @@ export type GateStatus = {
 export type HistoryEntry = {
   action: 'open' | 'close';
   timestamp: number; // Unix timestamp in milliseconds
-  actor: 'manual' | 'schedule' | 'system';
-  username?: string; // Username for manual actions
+  actor: 'user' | 'schedule' | 'system';
+  username?: string; // Username for user actions
 }; 

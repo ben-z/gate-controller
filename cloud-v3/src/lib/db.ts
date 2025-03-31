@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS gate_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   action TEXT NOT NULL CHECK(action IN ('open', 'close')),
   timestamp INTEGER NOT NULL,
-  actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system')),
+  actor TEXT NOT NULL CHECK(actor IN ('user', 'schedule', 'system')),
   username TEXT,
   FOREIGN KEY (username) REFERENCES users(username)
 );
@@ -157,7 +157,7 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
 
 export function updateGateStatus(
   newAction: "open" | "close",
-  actor: "manual" | "schedule" | "system" = "manual",
+  actor: "user" | "schedule" | "system" = "user",
   username?: string
 ): void {
   const now = Date.now();
@@ -167,7 +167,7 @@ export function updateGateStatus(
     newAction,
     now,
     actor,
-    actor === "manual" ? username : null
+    actor === "user" ? username : null
   );
 }
 

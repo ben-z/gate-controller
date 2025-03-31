@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update gate status
-    updateGateStatus(action, 'manual', user.username);
+    updateGateStatus(action, 'user', user.username);
 
     return Response.json({ status: action, timestamp: Date.now() });
   } catch (error) {
