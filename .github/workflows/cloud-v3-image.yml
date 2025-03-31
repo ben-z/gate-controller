@@ -10,7 +10,7 @@ on:
       - main
       - master
 env:
-  IMAGE_NAME: ${{ github.repository }}-cloud-v3
+  IMAGE_NAME: ${{ github.repository }}/cloud-v3
   IMAGE_REGISTRY: ghcr.io
   REGISTRY_USER: ${{ github.actor }}
   REGISTRY_PASSWORD: ${{ github.token }}
