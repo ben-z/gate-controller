@@ -1,9 +1,13 @@
 export interface User {
-  id: number;
   username: string;
   role: 'admin' | 'user';
   created_at: number;
   created_by?: string;
+}
+
+export interface UserCredentials {
+  username: string;
+  password_hash: string;
 }
 
 export interface CreateUserParams {
@@ -14,7 +18,7 @@ export interface CreateUserParams {
 }
 
 export interface UpdateUserParams {
-  id: number;
+  username: string;
   password?: string;
   role?: 'admin' | 'user';
 }

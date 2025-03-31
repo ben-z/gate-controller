@@ -1,25 +1,22 @@
-import Form from 'next/form';
-import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
+"use client";
+import { login } from "@/lib/auth/login";
+import Form from "next/form";
+import { useActionState } from "react";
 
 export default function LoginPage() {
-    async function handleLogin(formData: FormData) {
-        'use server';
+  const [state, formAction, pending] = useActionState(login, null);
 
-        const cookieStore = await cookies();
-        cookieStore.set('token', '1234567890');
-
-        redirect('/');
-    }
-
-    return (
-        <div>
-            <h1>Login</h1>
-            <Form action={handleLogin}>
-                <input type="text" name="username" />
-                <input type="password" name="password" />
-                <button type="submit">Login</button>
-            </Form>
-        </div>
-    )
+  return (
+    <div>
+      <h1>Login</h1>
+      <Form action={formAction}>
+        <input type="text" name="username" />
+        <input type="password" name="password" />
+        <button type="submit" disabled={pending}>
+          Login
+        </button>
+        {state?.error && <p>{state.error}</p>}
+      </Form>
+    </div>
+  );
 }
