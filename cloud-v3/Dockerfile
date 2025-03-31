@@ -56,7 +56,8 @@ VOLUME /data
 
 # Set up redis
 RUN mkdir -p /data/redis
-COPY redis.conf /data/redis/redis.conf
+ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
+COPY redis.conf ${REDIS_CONFIG_FILE}
 
 # Entrypoint sets up the container.
 ENTRYPOINT [ "/app/docker-entrypoint.js" ]
