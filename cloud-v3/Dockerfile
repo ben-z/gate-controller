@@ -1,5 +1,6 @@
 # syntax = docker/dockerfile:1
 
+
 # Adjust NODE_VERSION as desired
 ARG NODE_VERSION=22.11.0
 FROM node:${NODE_VERSION}-slim AS base
@@ -11,6 +12,8 @@ WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV="production"
+# Build timzone into the image
+ENV NEXT_PUBLIC_CONTROLLER_TIMEZONE='America/Vancouver'
 
 
 # Throw-away build stage to reduce size of final image
@@ -51,6 +54,5 @@ ENTRYPOINT [ "/app/docker-entrypoint.js" ]
 EXPOSE 3000
 ENV PORT=3000
 ENV DB_PATH='/data/sqlite.db'
-ENV NEXT_PUBLIC_CONTROLLER_TIMEZONE='America/Vancouver'
 # Also set ADMIN_CREDENTIALS via `fly secrets set ADMIN_CREDENTIALS=...`
 CMD [ "npm", "run", "start", "--", "-H", "0.0.0.0" ]
