@@ -2,6 +2,7 @@
 
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
 import { TimeDisplay, TimeFormat } from '@/components/time-display';
+import { UpcomingSchedules } from '@/components/upcoming-schedules';
 import { config } from '@/config';
 import { useState, useEffect } from 'react';
 
@@ -91,6 +92,13 @@ export function GateController() {
 
       <div className="h-6 mt-4 text-gray-600 dark:text-gray-400">
         {isLoading && "Updating gate status..."}
+      </div>
+
+      <div>
+        <h3 className="text-lg font-medium mb-3">Upcoming Schedules</h3>
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+          <UpcomingSchedules />
+        </div>
       </div>
 
       {gateStatus.history && (

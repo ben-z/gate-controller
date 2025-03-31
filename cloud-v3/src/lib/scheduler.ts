@@ -89,4 +89,39 @@ export function stopAllSchedules(): void {
     job.stop();
   });
   cronJobs.clear();
+}
+
+/**
+ * Gets the next execution time for a cron expression
+ */
+export function getNextExecutionTime(expression: string): Date | null {
+  try {
+    const job = new CronJob(expression, () => {}, null, true, config.controllerTimezone);
+    const nextDate = job.nextDate();
+    job.stop();
+    return nextDate.toJSDate();
+  } catch (error) {
+    console.error('Error getting next execution time:', error);
+    return null;
+  }
+}
+
+/**
+ * Gets upcoming schedule executions
+ */
+export function getUpcomingSchedules(schedules: Schedule[], count: number = 5): Array<{ schedule: Schedule; nextExecution: Date }> {
+  const now = new Date();
+  const upcoming = schedules
+    .filter(schedule => schedule.enabled)
+    .map(schedule => ({
+      schedule,
+      nextExecution: getNextExecutionTime(schedule.cron_expression)
+    }))
+    .filter((item): item is { schedule: Schedule; nextExecution: Date } => 
+      item.nextExecution !== null && item.nextExecution > now
+    )
+    .sort((a, b) => a.nextExecution.getTime() - b.nextExecution.getTime())
+    .slice(0, count);
+
+  return upcoming;
 } 
