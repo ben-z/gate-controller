@@ -50,7 +50,7 @@ ENTRYPOINT [ "/app/docker-entrypoint.js" ]
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
 ENV PORT=3000
-ENV DB_PATH = '/data/sqlite.db'
-ENV NEXT_PUBLIC_CONTROLLER_TIMEZONE = 'America/Vancouver'
+ENV DB_PATH='/data/sqlite.db'
+ENV NEXT_PUBLIC_CONTROLLER_TIMEZONE='America/Vancouver'
 # Also set ADMIN_CREDENTIALS via `fly secrets set ADMIN_CREDENTIALS=...`
 CMD [ "npm", "run", "start", "--", "-H", "0.0.0.0" ]
