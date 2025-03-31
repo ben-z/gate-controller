@@ -39,14 +39,14 @@ export function GateController() {
           <button
             onClick={() => handleAction('open')}
             disabled={gateStatus.status === 'open'}
-            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Open Gate
           </button>
           <button
             onClick={() => handleAction('close')}
             disabled={gateStatus.status === 'closed'}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Close Gate
           </button>
@@ -74,8 +74,8 @@ export function GateController() {
                       <td className="px-4 py-2 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           entry.action === 'open' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                         }`}>
                           {entry.action}
                         </span>
