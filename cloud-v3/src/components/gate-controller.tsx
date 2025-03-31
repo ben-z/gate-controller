@@ -67,9 +67,9 @@ export function GateController() {
       <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center items-center">
         <button
           onClick={() => handleGateAction('open')}
-          disabled={isLoading || gateStatus.status === 'open'}
+          disabled={gateStatus.status === 'open'}
           className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            isLoading || gateStatus.status === 'open'
+            gateStatus.status === 'open'
               ? 'bg-gray-400 dark:bg-gray-600'
               : 'bg-red-500 active:bg-red-600 dark:bg-red-600 dark:active:bg-red-700'
           }`}
@@ -79,19 +79,15 @@ export function GateController() {
 
         <button
           onClick={() => handleGateAction('close')}
-          disabled={isLoading || gateStatus.status === 'closed'}
+          disabled={gateStatus.status === 'closed'}
           className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            isLoading || gateStatus.status === 'closed'
+            gateStatus.status === 'closed'
               ? 'bg-gray-400 dark:bg-gray-600'
               : 'bg-green-500 active:bg-green-600 dark:bg-green-600 dark:active:bg-green-700'
           }`}
         >
           Close Gate
         </button>
-      </div>
-
-      <div className="h-6 mt-4 text-gray-600 dark:text-gray-400">
-        {isLoading && "Updating gate status..."}
       </div>
 
       <div>
