@@ -96,7 +96,7 @@ function startSchedule(schedule: Schedule): void {
   const job = new CronJob(
     schedule.cronExpression,
     () => {
-      updateGateStatus(schedule.action === 'open' ? 'open' : 'closed', false, 'schedule');
+      updateGateStatus(schedule.action, false, 'schedule');
     },
     null,
     true,

@@ -10,7 +10,7 @@ import useSWR, { mutate } from 'swr';
 interface ScheduleFormData {
   name: string;
   cronExpression: string;
-  action: 'open' | 'closed';
+  action: 'open' | 'close';
   enabled: boolean;
 }
 
@@ -116,7 +116,7 @@ export function ScheduleManager() {
     setNewSchedule({
       name: schedule.name,
       cronExpression: schedule.cronExpression,
-      action: schedule.action === 'open' ? 'open' : 'closed',
+      action: schedule.action === 'open' ? 'open' : 'close',
       enabled: schedule.enabled
     });
   };
@@ -126,7 +126,7 @@ export function ScheduleManager() {
     setNewSchedule({
       name: '',
       cronExpression: '',
-      action: 'closed',
+      action: 'close',
       enabled: true,
     });
   };
@@ -227,11 +227,11 @@ export function ScheduleManager() {
             <label className="block text-sm font-medium mb-1">Action</label>
             <select
               value={newSchedule.action}
-              onChange={(e) => setNewSchedule({ ...newSchedule, action: e.target.value as 'open' | 'closed' })}
+              onChange={(e) => setNewSchedule({ ...newSchedule, action: e.target.value as 'open' | 'close' })}
               className="w-full px-3 py-2 border rounded"
             >
               <option value="open">Open Gate</option>
-              <option value="closed">Close Gate</option>
+              <option value="close">Close Gate</option>
             </select>
           </div>
 

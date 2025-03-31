@@ -26,15 +26,9 @@ db.exec(`
     FOREIGN KEY (created_by) REFERENCES users(id)
   );
 
-  CREATE TABLE IF NOT EXISTS gate_status (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
-    timestamp INTEGER NOT NULL
-  );
-
   CREATE TABLE IF NOT EXISTS gate_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    action TEXT NOT NULL CHECK(action IN ('open', 'closed')),
+    action TEXT NOT NULL CHECK(action IN ('open', 'close')),
     timestamp INTEGER NOT NULL,
     actor TEXT NOT NULL CHECK(actor IN ('manual', 'schedule', 'system')),
     username TEXT,
@@ -55,17 +49,16 @@ db.exec(`
 
 // Create indexes
 db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_gate_status_timestamp ON gate_status(timestamp);
   CREATE INDEX IF NOT EXISTS idx_gate_history_timestamp ON gate_history(timestamp);
   CREATE INDEX IF NOT EXISTS idx_schedules_created_by ON schedules(created_by);
 `);
 
-// Initialize gate status if it doesn't exist
-const gateStatusCount = db.prepare('SELECT COUNT(*) as count FROM gate_status').get() as { count: number };
-if (gateStatusCount.count === 0) {
+// Initialize gate history if it doesn't exist
+const gateHistoryCount = db.prepare('SELECT COUNT(*) as count FROM gate_history').get() as { count: number };
+if (gateHistoryCount.count === 0) {
   db.exec(`
-    INSERT INTO gate_status (id, status, timestamp) 
-    VALUES (1, 'closed', ${Date.now()});
+    INSERT INTO gate_history (action, timestamp, actor) 
+    VALUES ('close', ${Date.now()}, 'system');
   `);
 }
 
@@ -88,9 +81,7 @@ if (userCount.count === 0) {
 }
 
 // Prepare statements for better performance
-const getStatusStmt = db.prepare('SELECT status, timestamp FROM gate_status WHERE id = 1');
-const updateStatusStmt = db.prepare('UPDATE gate_status SET status = ?, timestamp = ? WHERE id = 1');
-const updateLastContactStmt = db.prepare('UPDATE gate_status SET timestamp = ? WHERE id = 1');
+const getLatestHistoryStmt = db.prepare('SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 1');
 const getHistoryStmt = db.prepare('SELECT action, timestamp, actor, username FROM gate_history ORDER BY timestamp DESC LIMIT 10');
 const insertHistoryStmt = db.prepare('INSERT INTO gate_history (action, timestamp, actor, username) VALUES (?, ?, ?, ?)');
 
@@ -109,14 +100,14 @@ const updateScheduleStmt = db.prepare(`
 const deleteScheduleStmt = db.prepare('DELETE FROM schedules WHERE id = ?');
 
 export function getGateStatus(includeHistory: boolean = false): GateStatus {
-  const status = getStatusStmt.get() as { 
-    status: 'open' | 'closed';
+  const latest = getLatestHistoryStmt.get() as { 
+    action: 'open' | 'close';
     timestamp: number;
   };
 
   const result: GateStatus = { 
-    status: status.status,
-    lastContactTimestamp: status.timestamp
+    status: latest.action === 'open' ? 'open' : 'closed',
+    lastContactTimestamp: 0 // Default value, will be overridden by gate service
   };
   
   if (includeHistory) {
@@ -126,21 +117,14 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
   return result;
 }
 
-export function updateGateStatus(newStatus: 'open' | 'closed', includeHistory: boolean = false, actor: 'manual' | 'schedule' | 'system' = 'manual', username?: string): GateStatus {
+export function updateGateStatus(newAction: 'open' | 'close', includeHistory: boolean = false, actor: 'manual' | 'schedule' | 'system' = 'manual', username?: string): GateStatus {
   const now = Date.now();
   
-  // Update status
-  updateStatusStmt.run(newStatus, now);
-  
   // Add to history
-  insertHistoryStmt.run(newStatus, now, actor, actor === 'manual' ? username : null);
+  insertHistoryStmt.run(newAction, now, actor, actor === 'manual' ? username : null);
   
   // Get updated state
   return getGateStatus(includeHistory);
-}
-
-export function updateLastContact(): void {
-  updateLastContactStmt.run(Date.now());
 }
 
 // Schedule functions

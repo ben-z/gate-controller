@@ -17,23 +17,15 @@ type TimeFormat = 'relative' | 'controller';
 
 /**
  * Displays a timestamp in various formats.
- * 
- * Note on time synchronization:
- * To handle potential clock differences between server and client, we compare
- * the server timestamp with client's current time. If server time appears to be
- * in the future (due to clock mismatch), we use client's time instead to avoid
- * showing confusing "in X seconds" messages.
- * 
- * A more robust solution would be to:
- * 1. Have server send its current time alongside timestamps
- * 2. Calculate and store the server-client time offset
- * 3. Apply this offset when displaying times
- * However, for this use case, the current approach is sufficient.
  */
-export function TimeDisplay({ timestamp, isClient, format: timeFormat }: { 
+export function TimeDisplay({ 
+  timestamp, 
+  format, 
+  className = "" 
+}: { 
   timestamp: number; // Unix timestamp in milliseconds
-  isClient: boolean;
-  format: TimeFormat;
+  format: 'relative' | string; // 'relative' or timezone string
+  className?: string;
 }) {
   const [, forceUpdate] = useState({});
 
@@ -43,42 +35,29 @@ export function TimeDisplay({ timestamp, isClient, format: timeFormat }: {
     return () => clearInterval(timer);
   }, []);
 
-  // Create Date objects from Unix timestamps
+  // Create Date object from Unix timestamp
   const date = new Date(timestamp);
-  const clientNow = new Date();
   
   // Ensure the timestamp is valid
   if (isNaN(date.getTime())) {
     console.error('Invalid timestamp:', timestamp);
-    return <span>Invalid time</span>;
+    return <span className={className}>invalid time</span>;
   }
 
-  // If the server time is in the future relative to client time,
-  // use the client's time instead to avoid "in X seconds" messages
-  const displayDate = date > clientNow ? clientNow : date;
-
   // Format relative time
-  const relativeTime = formatDistanceToNow(displayDate, { 
+  const relativeTime = formatDistanceToNow(date, { 
     addSuffix: true,
     includeSeconds: true  // Show more precise times for recent events
   });
   
-  // Format time using specified format string with controller timezone
+  // Format time using specified timezone
   const formatStr = 'yyyy-MM-dd HH:mm:ss zzz';
-  const controllerTime = formatInTimeZone(displayDate, config.controllerTimezone, formatStr);
+  const zonedTime = formatInTimeZone(date, format === 'relative' ? 'UTC' : format, formatStr);
 
-  // During SSR, show controller time to avoid hydration mismatch
-  if (!isClient) {
-    return <span>{controllerTime}</span>;
-  }
-
-  const displayTime = {
-    relative: relativeTime,
-    controller: controllerTime
-  }[timeFormat];
+  const displayTime = format === 'relative' ? relativeTime : zonedTime;
 
   return (
-    <span title={controllerTime}>
+    <span title={zonedTime} className={className}>
       {displayTime}
     </span>
   );
@@ -90,14 +69,11 @@ interface GateControllerProps {
 
 export function GateController({ initialData }: GateControllerProps) {
   const { username } = useAuth();
-  const [isClient, setIsClient] = useState(false);
   const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
   const [isLoading, setIsLoading] = useState(false);
 
   // Initialize time format from localStorage if available
-  // During SSR, use controller time to match the TimeDisplay component's SSR behavior
   useEffect(() => {
-    setIsClient(true);
     const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
     setTimeFormat(savedFormat || 'controller');
   }, []);
@@ -137,7 +113,7 @@ export function GateController({ initialData }: GateControllerProps) {
     console.log('Gate status updated:', data?.status, new Date().toISOString());
   }, [data?.status]);
 
-  const updateGateStatus = async (newStatus: 'open' | 'closed') => {
+  const updateGateStatus = async (newAction: 'open' | 'close') => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/gate?includeHistory=true', {
@@ -145,7 +121,7 @@ export function GateController({ initialData }: GateControllerProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: newStatus, username }),
+        body: JSON.stringify({ action: newAction, username }),
       });
       const data = await response.json();
       await mutate(data, false); // Update the cache with new data
@@ -174,7 +150,11 @@ export function GateController({ initialData }: GateControllerProps) {
         <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
           <span>Last contact with gate:</span>
           <span className="font-medium">
-            <TimeDisplay timestamp={lastContactTimestamp} isClient={isClient} format="relative" />
+            <TimeDisplay 
+              timestamp={lastContactTimestamp} 
+              format="relative" 
+              className={lastContactTimestamp === 0 || Date.now() - lastContactTimestamp > 60000 ? "text-red-500 dark:text-red-400" : ""} 
+            />
           </span>
         </div>
       </div>
@@ -193,7 +173,7 @@ export function GateController({ initialData }: GateControllerProps) {
         </button>
 
         <button
-          onClick={() => updateGateStatus('closed')}
+          onClick={() => updateGateStatus('close')}
           disabled={isLoading || status === 'closed'}
           className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
             isLoading || status === 'closed'
@@ -260,8 +240,7 @@ export function GateController({ initialData }: GateControllerProps) {
                   <time className="text-sm text-gray-500 dark:text-gray-400">
                     <TimeDisplay
                       timestamp={entry.timestamp}
-                      isClient={isClient}
-                      format={timeFormat}
+                      format={timeFormat === 'relative' ? 'relative' : config.controllerTimezone}
                     />
                   </time>
                 </div>
