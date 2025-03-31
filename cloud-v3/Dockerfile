@@ -40,12 +40,23 @@ RUN npm prune --omit=dev
 # Final stage for app image
 FROM base
 
+# Install redis-server
+RUN apt-get update && apt-get install -y lsb-release curl gpg
+RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list
+RUN apt-get update && apt-get install -y redis-server
+
 # Copy built application
 COPY --from=build /app /app
 
 # Set up sqlite3 on a separate volume
 RUN mkdir -p /data
 VOLUME /data
+
+# Set up redis
+RUN mkdir -p /data/redis
+COPY redis.conf /data/redis/redis.conf
 
 # Entrypoint sets up the container.
 ENTRYPOINT [ "/app/docker-entrypoint.js" ]
@@ -54,5 +65,8 @@ ENTRYPOINT [ "/app/docker-entrypoint.js" ]
 EXPOSE 3000
 ENV PORT=3000
 ENV DB_PATH='/data/sqlite.db'
+ENV REDIS_HOST='localhost'
+ENV REDIS_PORT='6379'
 # Also set ADMIN_CREDENTIALS via `fly secrets set ADMIN_CREDENTIALS=...`
-CMD [ "npm", "run", "start", "--", "-H", "0.0.0.0" ]
+
+CMD [ "npm", "run", "prod:all" ]
