@@ -31,12 +31,12 @@ export function GateController() {
     }
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
   if (isError) {
     return <div>Error loading gate status</div>;
+  }
+
+  if (isLoading && !gateStatus) {
+    return <div>Loading gate status...</div>;
   }
 
   if (!gateStatus) {

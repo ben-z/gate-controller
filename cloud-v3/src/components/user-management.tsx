@@ -71,12 +71,16 @@ export function UserManagement() {
     });
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
   if (isError) {
     return <div>Error loading users</div>;
+  }
+
+  if (isLoading && !users) {
+    return <div>Loading users...</div>;
+  }
+
+  if (!users) {
+    return <div>No users available</div>;
   }
 
   return (

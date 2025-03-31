@@ -104,12 +104,16 @@ export function ScheduleManager() {
     }
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
   if (isError) {
     return <div>Error loading schedules</div>;
+  }
+
+  if (isLoading && !schedules) {
+    return <div>Loading schedules...</div>;
+  }
+
+  if (!schedules) {
+    return <div>No schedules available</div>;
   }
 
   return (

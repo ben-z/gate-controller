@@ -18,23 +18,16 @@ const fetcher = async (url: string) => {
 };
 
 export function UpcomingSchedules() {
-  const { data: upcoming, error, isLoading } = useSWR<UpcomingSchedule[]>(
+  const { data: upcoming, error } = useSWR<UpcomingSchedule[]>(
     '/api/schedules/upcoming',
     fetcher,
     {
       refreshInterval: 5000, // Refresh every 5 seconds
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
+      keepPreviousData: true, // Keep showing the old data while fetching
     }
   );
-
-  if (isLoading) {
-    return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        Loading upcoming schedules...
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -44,7 +37,15 @@ export function UpcomingSchedules() {
     );
   }
 
-  if (!upcoming || upcoming.length === 0) {
+  if (!upcoming) {
+    return (
+      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+        No upcoming schedules
+      </div>
+    );
+  }
+
+  if (upcoming.length === 0) {
     return (
       <div className="text-center py-4 text-gray-500 dark:text-gray-400">
         No upcoming schedules
