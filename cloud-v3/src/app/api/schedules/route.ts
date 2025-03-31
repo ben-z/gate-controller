@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
 
     // Get request body
     const body = await request.json();
-    const { name, cronExpression, action, enabled } = body;
+    const { name, cron_expression, action, enabled } = body;
 
-    if (!name || !cronExpression || !action) {
+    if (!name || !cron_expression || !action) {
       return new Response('Missing required fields', { status: 400 });
     }
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Create schedule
     const newSchedule = createSchedule({
       name,
-      cronExpression,
+      cron_expression,
       action,
       enabled: enabled ?? true,
       created_by: user.username
@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
 
     // Get request body
     const body = await request.json();
-    const { id, name, cronExpression, action, enabled } = body;
+    const { id, name, cron_expression, action, enabled } = body;
 
     if (!id) {
       return new Response('Missing schedule ID', { status: 400 });
@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest) {
     // Update schedule
     const updatedSchedule = updateSchedule(id, {
       name,
-      cronExpression,
+      cron_expression,
       action,
       enabled
     });

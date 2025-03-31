@@ -11,13 +11,28 @@ export function ScheduleManager() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    cronExpression: '',
+    cron_expression: '',
     action: 'open' as 'open' | 'close',
     enabled: true,
   });
+  const [cronError, setCronError] = useState<string | null>(null);
+
+  const validateCronExpression = (expression: string): boolean => {
+    try {
+      cronstrue.toString(expression);
+      setCronError(null);
+      return true;
+    } catch {
+      setCronError('Invalid cron expression');
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateCronExpression(formData.cron_expression)) {
+      return;
+    }
     try {
       if (editingId) {
         await updateSchedule(editingId, formData);
@@ -29,10 +44,11 @@ export function ScheduleManager() {
       setEditingId(null);
       setFormData({
         name: '',
-        cronExpression: '',
+        cron_expression: '',
         action: 'open',
         enabled: true,
       });
+      setCronError(null);
     } catch (error) {
       console.error('Failed to save schedule:', error);
     }
@@ -42,7 +58,7 @@ export function ScheduleManager() {
     setEditingId(schedule.id);
     setFormData({
       name: schedule.name,
-      cronExpression: schedule.cronExpression,
+      cron_expression: schedule.cron_expression,
       action: schedule.action,
       enabled: schedule.enabled,
     });
@@ -64,17 +80,27 @@ export function ScheduleManager() {
     setEditingId(null);
     setFormData({
       name: '',
-      cronExpression: '',
+      cron_expression: '',
       action: 'open',
       enabled: true,
     });
   };
 
-  const getCronDescription = (cronExpression: string) => {
+  const handleCronChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, cron_expression: value });
+    if (value) {
+      validateCronExpression(value);
+    } else {
+      setCronError(null);
+    }
+  };
+
+  const getCronDescription = (cron_expression: string) => {
     try {
-      return cronstrue.toString(cronExpression);
+      return cronstrue.toString(cron_expression);
     } catch {
-      return 'Invalid cron expression';
+      return `Invalid cron expression: ${cron_expression}`;
     }
   };
 
@@ -116,16 +142,24 @@ export function ScheduleManager() {
             <label className="block text-sm font-medium mb-1">Cron Expression</label>
             <input
               type="text"
-              value={formData.cronExpression}
-              onChange={(e) => setFormData({ ...formData, cronExpression: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
+              value={formData.cron_expression}
+              onChange={handleCronChange}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 ${
+                cronError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-700'
+              }`}
+              placeholder="* * * * *"
               required
             />
-            {formData.cronExpression && (
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {getCronDescription(formData.cronExpression)}
+            {formData.cron_expression && (
+              <p className={`mt-1 text-sm ${
+                cronError ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'
+              }`}>
+                {cronError || getCronDescription(formData.cron_expression)}
               </p>
             )}
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Format: minute hour day month weekday (e.g., &quot;0 8 * * 1-5&quot; for weekdays at 8 AM)
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Action</label>
@@ -197,9 +231,9 @@ export function ScheduleManager() {
                     {schedule.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div>{schedule.cronExpression}</div>
+                    <div>{schedule.cron_expression}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {getCronDescription(schedule.cronExpression)}
+                      {getCronDescription(schedule.cron_expression)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">

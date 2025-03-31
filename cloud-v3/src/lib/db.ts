@@ -370,7 +370,7 @@ export function createSchedule(
 
   const result = insertScheduleStmt.run(
     schedule.name,
-    schedule.cronExpression,
+    schedule.cron_expression,
     schedule.action,
     schedule.enabled ? 1 : 0,
     now,
@@ -380,7 +380,7 @@ export function createSchedule(
   return {
     id: result.lastInsertRowid as number,
     name: schedule.name,
-    cronExpression: schedule.cronExpression,
+    cron_expression: schedule.cron_expression,
     action: schedule.action,
     enabled: schedule.enabled,
   };
@@ -400,7 +400,7 @@ export function updateSchedule(
 
   updateScheduleStmt.run(
     updated.name,
-    updated.cronExpression,
+    updated.cron_expression,
     updated.action,
     updated.enabled ? 1 : 0,
     id
