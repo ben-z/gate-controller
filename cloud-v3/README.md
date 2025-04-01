@@ -30,7 +30,7 @@ A Next.js-based web application for controlling and monitoring gates.
 3. Set up environment variables:
    Create a `.env` file with the following variables:
    ```
-   ADMIN_CREDENTIALS=your_admin_credentials
+   INITIAL_ADMIN_CREDENTIALS=your_INITIAL_ADMIN_CREDENTIALS
    ```
 
 4. Start the development server:

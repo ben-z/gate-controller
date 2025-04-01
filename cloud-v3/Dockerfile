@@ -67,6 +67,6 @@ ENV PORT=3000
 ENV DB_PATH='/data/sqlite.db'
 ENV REDIS_HOST='localhost'
 ENV REDIS_PORT='6379'
-# Also set ADMIN_CREDENTIALS via `fly secrets set ADMIN_CREDENTIALS=...`
+# Also set INITIAL_ADMIN_CREDENTIALS at runtime. In fly.io, this can be done via `fly secrets set INITIAL_ADMIN_CREDENTIALS=...`
 
 CMD [ "run", "prod:all" ]
