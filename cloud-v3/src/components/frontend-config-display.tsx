@@ -6,6 +6,8 @@ export function FrontendConfigDisplay() {
   const [isPersistent, setIsPersistent] = useState(false);
 
   useEffect(() => {
+    let interval: NodeJS.Timeout | undefined = undefined;
+
     function requestPersistentStorage() {
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist().then((result) => {
@@ -28,7 +30,7 @@ export function FrontendConfigDisplay() {
     }
     requestPersistentStorage();
 
-    const interval =  setInterval(requestPersistentStorage, 1000);
+    interval =  setInterval(requestPersistentStorage, 1000);
     return () => clearInterval(interval);
   }, []);
 
