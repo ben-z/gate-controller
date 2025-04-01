@@ -17,6 +17,8 @@ export default function ClientInit() {
             "Storage is NOT persistent. Storage may be cleared by the UA under storage pressure."
           );
         }
+      }).catch((err) => {
+        console.error("Error requesting persistent storage", err);
       });
     }
   }, []);
