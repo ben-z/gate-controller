@@ -16,7 +16,7 @@ env:
   REGISTRY_PASSWORD: ${{ github.token }}
 
 jobs:
-  build-and-push-image:
+  build-amd64:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,6 +41,8 @@ jobs:
         uses: docker/metadata-action@c4ee3adeed93b1fa6a762f209fb01608c1a22f1e
         with:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-amd64
           tags: |
             type=schedule
             type=ref,event=branch
@@ -48,11 +50,16 @@ jobs:
             type=ref,event=pr
             type=sha,format=long
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@91df6b874e498451163feb47610c87c4a218c1ee
-        with:
-          context: cloud-v3/
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: print tags for debugging
+        run: |
+          echo "tags: ${{ steps.meta.outputs.tags }}"
+          echo "labels: ${{ steps.meta.outputs.labels }}"
+
+      # - name: Build and push Docker image
+      #   uses: docker/build-push-action@91df6b874e498451163feb47610c87c4a218c1ee
+      #   with:
+      #     context: cloud-v3/
+      #     platforms: linux/amd64,linux/arm64
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
