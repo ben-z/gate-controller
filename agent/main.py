@@ -55,7 +55,9 @@ def loop_once():
 
         response = requests.post(url, json=data, timeout=5)
 
-        command = response.json()['status']
+        command = response.json().get('status')
+        if command is None:
+            raise KeyError("The 'status' key is missing in the response")
         logging.info(f"Command: {command}")
 
         if command == 'closed':
