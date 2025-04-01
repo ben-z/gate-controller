@@ -1,6 +1,6 @@
 import { config } from "@/config";
 
-export function ConfigDisplay() {
+export function InstanceConfigDisplay() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Instance Configuration</h2>

@@ -3,7 +3,8 @@ import { ensureSession } from "@/lib/auth/ensure-session";
 import { GateController } from "@/components/gate-controller";
 import { ScheduleManager } from "@/components/schedule-manager";
 import { UserManagement } from "@/components/user-management";
-import { ConfigDisplay } from "@/components/config-display";
+import { InstanceConfigDisplay } from "@/components/instance-config-display";
+import { FrontendConfigDisplay } from "@/components/frontend-config-display";
 import { getInitialData } from "@/lib/data";
 import { SWRConfig } from "swr";
 
@@ -59,7 +60,10 @@ export default async function DashboardPage() {
 
             {/* Configuration Section */}
             <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-              <ConfigDisplay />
+              <InstanceConfigDisplay />
+            </section>
+            <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <FrontendConfigDisplay />
             </section>
 
             {/* Logout Button */}
