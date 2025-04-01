@@ -157,11 +157,19 @@ jobs:
           for tag in ${{ steps.meta.outputs.tags }}; do
             echo "Creating manifest for $tag"
             
-            # The source manifests are already lists because of provenance, so we need to extract the digest from the list.
-            __amd64_digest=$(docker manifest inspect ${tag}-amd64 | jq -r '.manifests[] | select(.platform.architecture == "amd64") | .digest')
-            __arm64_digest=$(docker manifest inspect ${tag}-arm64 | jq -r '.manifests[] | select(.platform.architecture == "arm64") | .digest')
+            # Combine all manifests into a single manifest
+            __amd64_digests=$(docker manifest inspect ${tag}-amd64 | jq -r '.manifests[] | .digest')
+            __arm64_digests=$(docker manifest inspect ${tag}-arm64 | jq -r '.manifests[] | .digest')
 
-            docker manifest create ${tag} ${IMAGE_REGISTRY}/${IMAGE_NAME}@${__amd64_digest} ${IMAGE_REGISTRY}/${IMAGE_NAME}@${__arm64_digest}
+            __sources=()
+            for digest in $__amd64_digests; do
+              __sources+=(${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest})
+            done
+            for digest in $__arm64_digests; do
+              __sources+=(${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest})
+            done
+
+            docker manifest create ${tag} ${__sources[@]}
 
             docker manifest push ${tag}
           done
