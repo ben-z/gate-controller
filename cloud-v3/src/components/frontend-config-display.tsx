@@ -30,7 +30,7 @@ export function FrontendConfigDisplay() {
     }
     requestPersistentStorage();
 
-    interval =  setInterval(requestPersistentStorage, 5000);
+    interval = setInterval(requestPersistentStorage, 5000);
     return () => clearInterval(interval);
   }, []);
 
