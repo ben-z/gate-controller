@@ -21,11 +21,11 @@ export const config: {
 } as const;
 
 export const secrets: {
-  adminCredentials: {
+  initialAdminCredentials: {
     username: string;
     password: string;
   };
 } = {
   // The initial admin user that will be created when the database is empty.
-  adminCredentials: JSON.parse(process.env.ADMIN_CREDENTIALS || '{"username":"admin","password":"replace_me"}'),
+  initialAdminCredentials: JSON.parse(process.env.INITIAL_ADMIN_CREDENTIALS || '{"username":"admin","password":"replace_me"}'),
 } as const;
