@@ -111,3 +111,57 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  create-multi-arch-manifest:
+    runs-on: ubuntu-latest
+    needs:
+      - build-amd64
+      - build-arm64
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@40891eba8c2bcd1309b07ba8b11232f313e86779
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@c4ee3adeed93b1fa6a762f209fb01608c1a22f1e
+        with:
+          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,format=long
+
+      - name: Print tags for debugging
+        run: |
+          echo "tags: ${{ steps.meta.outputs.tags }}"
+          echo "labels: ${{ steps.meta.outputs.labels }}"
+
+      - name: Create multi-arch manifests
+        run: |
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            echo "Creating manifest for $tag"
+            
+            # The source manifests are already lists because of provenance, so we need to extract the digest from the list.
+            __amd64_digest=$(docker manifest inspect ${tag}-amd64 | jq -r '.manifests[] | select(.platform.architecture == "amd64") | .digest')
+            __arm64_digest=$(docker manifest inspect ${tag}-arm64 | jq -r '.manifests[] | select(.platform.architecture == "arm64") | .digest')
+
+            docker manifest create ${tag} ${IMAGE_REGISTRY}/${IMAGE_NAME}@${__amd64_digest} ${IMAGE_REGISTRY}/${IMAGE_NAME}@${__arm64_digest}
+
+            docker manifest push ${tag}
+          done
