@@ -2,6 +2,7 @@
 <html lang="en">
 
 <head>
+    <!-- Fallback redirection to the dashboard after 10 seconds -->
     <meta http-equiv="refresh" content="10;URL=./">
     <link rel="apple-touch-icon" href="./static/{{icon_name}}.png">
     <title>{{title}}</title>
@@ -10,6 +11,16 @@
 
 <body>
     Successfully performed action <b>{{action}}</b>! Redirecting to <a href="./">dashboard</a> in 10 seconds...
+
+    <script>
+        // Attempt to auto-close the tab after 1 second
+        setTimeout(function() {
+            window.close();
+        }, 1000);
+
+        // Fallback: If the tab is not closed (e.g., due to browser restrictions),
+        // the user will be redirected to the dashboard in 10 seconds (via the meta tag).
+    </script>
 </body>
 
 </html>
