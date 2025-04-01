@@ -8,6 +8,7 @@ export const config: {
     host: string;
     port: number;
   };
+  build_info: unknown;
 } = {
   // The timezone of the controller.
   controllerTimezone: process.env.NEXT_PUBLIC_CONTROLLER_TIMEZONE || "UTC",
@@ -18,6 +19,9 @@ export const config: {
     host: process.env.REDIS_HOST || "localhost",
     port: parseInt(process.env.REDIS_PORT || "6379"),
   },
+  // The build information injected by the image builder:
+  // https://github.com/docker/metadata-action/blob/902fa8ec7d6ecbf8d84d538b9b233a880e428804/README.md?plain=1#L336-L339
+  build_info: JSON.parse(process.env.DOCKER_METADATA_OUTPUT_JSON || "{}"),
 } as const;
 
 export const secrets: {
