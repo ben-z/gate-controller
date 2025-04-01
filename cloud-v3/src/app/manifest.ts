@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+// Next.js PWA docs:
+// https://nextjs.org/docs/app/building-your-application/configuring/progressive-web-apps
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Gate Controller Cloud V3",
