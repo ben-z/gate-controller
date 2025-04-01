@@ -12,18 +12,27 @@ import { refreshSession } from "@/lib/db";
  * @throws Redirects to /login if no valid session is found
  */
 export async function ensureSession() {
+  const session = await getSession();
+
+  if (!session) {
+    return redirect("/login");
+  }
+
+  return session;
+}
+
+export async function getSession() {
   const cookieStore = await cookies();
   const sessionKey = cookieStore.get("session_key");
 
   if (!sessionKey) {
-    return redirect("/login");
+    return null;
   }
 
-  // validate session key
   const refreshResult = refreshSession(sessionKey.value);
 
   if (!refreshResult) {
-    return redirect("/login");
+    return null;
   }
 
   return refreshResult;
