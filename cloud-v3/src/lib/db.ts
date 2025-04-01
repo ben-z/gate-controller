@@ -99,7 +99,7 @@ function bootstrapDB() {
   // Initialize admin account if no users exist
   const userCount = countUsersStmt.get() as { count: number };
   if (userCount.count === 0) {
-    const { username, password } = secrets.adminCredentials;
+    const { username, password } = secrets.initialAdminCredentials;
     const salt = bcrypt.genSaltSync(10);
     const passwordHash = bcrypt.hashSync(password, salt);
     const now = Date.now();
