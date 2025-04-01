@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 export function GateController() {
   const { gateStatus, isLoading, isError, mutate } = useGateStatus(true);
   const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
+  const [actionInProgress, setActionInProgress] = useState<'open' | 'close' | null>(null);
 
   // Initialize time format from localStorage if available
   useEffect(() => {
@@ -24,10 +25,13 @@ export function GateController() {
 
   const handleGateAction = async (action: 'open' | 'close') => {
     try {
+      setActionInProgress(action);
       await updateGateStatus(action);
       await mutate();
     } catch (error) {
       console.error('Error updating gate status:', error);
+    } finally {
+      setActionInProgress(null);
     }
   };
 
@@ -67,26 +71,36 @@ export function GateController() {
       <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center items-center">
         <button
           onClick={() => handleGateAction('open')}
-          disabled={gateStatus.status === 'open'}
-          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            gateStatus.status === 'open'
+          disabled={gateStatus.status === 'open' || actionInProgress !== null}
+          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform relative ${
+            gateStatus.status === 'open' || actionInProgress !== null
               ? 'bg-gray-400 dark:bg-gray-600'
-              : 'bg-red-500 active:bg-red-600 dark:bg-red-600 dark:active:bg-red-700'
+              : 'bg-red-500 active:scale-95 dark:bg-red-600 dark:active:bg-red-700'
           }`}
         >
-          Open Gate
+          {actionInProgress === 'open' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          <span className="relative z-10">Open Gate</span>
         </button>
 
         <button
           onClick={() => handleGateAction('close')}
-          disabled={gateStatus.status === 'closed'}
-          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform active:scale-95 ${
-            gateStatus.status === 'closed'
+          disabled={gateStatus.status === 'closed' || actionInProgress !== null}
+          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform relative ${
+            gateStatus.status === 'closed' || actionInProgress !== null
               ? 'bg-gray-400 dark:bg-gray-600'
-              : 'bg-green-500 active:bg-green-600 dark:bg-green-600 dark:active:bg-green-700'
+              : 'bg-green-500 active:scale-95 dark:bg-green-600 dark:active:bg-green-700'
           }`}
         >
-          Close Gate
+          {actionInProgress === 'close' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          <span className="relative z-10">Close Gate</span>
         </button>
       </div>
 
