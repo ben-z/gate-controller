@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "An app to control your gate",
     start_url: "/dashboard",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#000000",
+    background_color: "#000000",
+    theme_color: "#121212",
     icons: [
       {
         src: "icon-192x192.png",
