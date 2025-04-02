@@ -17,7 +17,7 @@ export const metadata: Metadata = {
       },
       {
         url: "/apple-touch-startup-image-dark.png",
-        media: "screen and(prefers-color-scheme: dark)",
+        media: "screen and (prefers-color-scheme: dark)",
       },
     ],
   },
