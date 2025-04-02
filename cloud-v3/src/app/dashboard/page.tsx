@@ -19,7 +19,7 @@ export default async function DashboardPage() {
       '/api/users': initialData.users,
       '/api/schedules/upcoming': initialData.upcomingSchedules,
     }}}>
-      <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div className="min-h-screen">
         {/* Header */}
         <header className="border-b border-gray-200 dark:border-gray-800">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
