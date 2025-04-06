@@ -34,9 +34,9 @@ hostname = socket.gethostname()
 # Define GPIO pin numbers
 relay1 = 4
 # kept for future use
-#relay2 = 22
-#relay3 = 6
-#relay4 = 26
+# relay2 = 22
+# relay3 = 6
+# relay4 = 26
 
 # Use the Broadcom SOC channel
 GPIO.setmode(GPIO.BCM)
@@ -49,13 +49,15 @@ GPIO.output(relay1, GPIO.LOW)
 
 def loop_once():
     try:
-        #url = 'http://100.106.129.114:8081/api/take_command' # for debugging
-        url = 'https://gate-opener-cloud.fly.dev/api/take_command'
+        # url = 'http://100.106.129.114:8081/api/take_command' # for debugging
+        url = "https://gate-controller-cloud-v3.benzhang.dev/api/gate/take_status"
         data = {'host': hostname}
 
         response = requests.post(url, json=data, timeout=5)
 
-        command = response.text
+        command = response.json().get('status')
+        if command is None:
+            raise KeyError("The 'status' key is missing in the response")
         logging.info(f"Command: {command}")
 
         if command == 'closed':
@@ -96,4 +98,3 @@ finally:
 
     logging.info("Cleaning up!")
     GPIO.cleanup()
-
