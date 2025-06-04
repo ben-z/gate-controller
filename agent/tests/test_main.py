@@ -42,6 +42,11 @@ def load_module(monkeypatch, status):
     monkeypatch.setitem(sys.modules, "RPi", rpi_pkg)
     monkeypatch.setitem(sys.modules, "RPi.GPIO", gpio_module)
 
+    # Disable Sentry in tests to avoid network calls
+    import sentry_sdk
+    monkeypatch.setattr(sentry_sdk, "init", lambda *a, **kw: None)
+    monkeypatch.setattr(sentry_sdk.crons, "monitor", lambda *a, **kw: (lambda f: f))
+
     class FakeResponse:
         def json(self):
             return {"status": status} if status is not None else {}
