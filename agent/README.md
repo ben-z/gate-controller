@@ -11,3 +11,12 @@ Always-on service:
 docker-compose up -d --build
 docker-compose logs --tail 10 -f
 ```
+
+### Testing
+
+Install pytest and run the unit tests:
+```bash
+pip install -r requirements.txt
+pip install pytest
+pytest
+```

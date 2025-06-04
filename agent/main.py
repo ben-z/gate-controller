@@ -77,24 +77,31 @@ def loop_once():
 def ping_healthcheck():
     sleep(0.5) # space out the begin and end API calls
 
-# Continuously poll for the latest command
-try:
-    last_healthcheck_time = 0
-    while True:
-        loop_once()
-        now = time.time()
-        # Ping healthcheck every minute
-        if now - last_healthcheck_time > 60:
-            logging.info("Pinging healthcheck")
-            start = perf_counter()
-            ping_healthcheck()
-            stop = perf_counter()
-            logging.info(f"Healthcheck loop completed in {stop-start:.2f} seconds")
-            last_healthcheck_time = now
-        time.sleep(1)
-finally:
-    logging.info("Turning off relays")
-    GPIO.output(relay1, GPIO.LOW)
+def main_loop():
+    """Continuously poll for the latest command."""
+    try:
+        last_healthcheck_time = 0
+        while True:
+            loop_once()
+            now = time.time()
+            # Ping healthcheck every minute
+            if now - last_healthcheck_time > 60:
+                logging.info("Pinging healthcheck")
+                start = perf_counter()
+                ping_healthcheck()
+                stop = perf_counter()
+                logging.info(
+                    f"Healthcheck loop completed in {stop-start:.2f} seconds"
+                )
+                last_healthcheck_time = now
+            time.sleep(1)
+    finally:
+        logging.info("Turning off relays")
+        GPIO.output(relay1, GPIO.LOW)
 
-    logging.info("Cleaning up!")
-    GPIO.cleanup()
+        logging.info("Cleaning up!")
+        GPIO.cleanup()
+
+
+if __name__ == "__main__":
+    main_loop()
