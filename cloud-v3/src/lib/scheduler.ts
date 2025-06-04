@@ -10,44 +10,55 @@ const REDIS_CONNECTION_CONFIG = {
 };
 
 // Create a queue for gate control jobs
-const gateQueue = new Queue("gate-control", {
-  connection: REDIS_CONNECTION_CONFIG,
-});
-
-// Create a worker to process the jobs
-new Worker(
-  gateQueue.name,
-  async (job) => {
-    console.log(`Executing schedule: ${job.data.scheduleName}`);
-
-    // Here we fetch the schedule from the database again to be extra sure that the job is valid.
-    const schedule = await getSchedule(job.data.scheduleName);
-    if (!schedule) {
-      throw new Error(
-        `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
-      );
-    }
-    if (schedule.action !== job.data.action) {
-      throw new Error(
-        `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
-      );
-    }
-    await updateGateStatus(schedule.action, "schedule", schedule.name);
-  },
-  {
+let gateQueue: Queue;
+if (process.env.NODE_ENV !== "test") {
+  gateQueue = new Queue("gate-control", {
     connection: REDIS_CONNECTION_CONFIG,
-  }
-);
+  });
 
-// Create queue events listener
-const queueEvents = new QueueEvents(gateQueue.name, {
-  connection: REDIS_CONNECTION_CONFIG,
-});
+  // Create a worker to process the jobs
+  new Worker(
+    gateQueue.name,
+    async (job) => {
+      console.log(`Executing schedule: ${job.data.scheduleName}`);
 
-// Log failed jobs
-queueEvents.on("failed", ({ jobId, failedReason }) => {
-  console.error(`Job ${jobId} failed:`, failedReason);
-});
+      // Here we fetch the schedule from the database again to be extra sure that the job is valid.
+      const schedule = await getSchedule(job.data.scheduleName);
+      if (!schedule) {
+        throw new Error(
+          `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
+        );
+      }
+      if (schedule.action !== job.data.action) {
+        throw new Error(
+          `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
+        );
+      }
+      await updateGateStatus(schedule.action, "schedule", schedule.name);
+    },
+    {
+      connection: REDIS_CONNECTION_CONFIG,
+    }
+  );
+
+  // Create queue events listener
+  const queueEvents = new QueueEvents(gateQueue.name, {
+    connection: REDIS_CONNECTION_CONFIG,
+  });
+
+  // Log failed jobs
+  queueEvents.on("failed", ({ jobId, failedReason }) => {
+    console.error(`Job ${jobId} failed:`, failedReason);
+  });
+} else {
+  // Dummy queue implementation for tests to avoid Redis connections
+  gateQueue = {
+    name: "gate-control",
+    async upsertJobScheduler() {},
+    async removeJobScheduler() {},
+    async getDelayed() { return []; },
+  } as unknown as Queue;
+}
 
 /**
  * Validates a cron expression

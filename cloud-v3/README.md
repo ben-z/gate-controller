@@ -14,7 +14,7 @@ A Next.js-based web application for controlling and monitoring gates.
 
 ## Prerequisites
 
-- Node.js 22.11.0 or later
+- Node.js 20 or later
 - npm or yarn package manager
 - Docker (for containerized deployment)
 - Fly.io CLI (for deployment)
@@ -48,6 +48,7 @@ The application will be available at [http://localhost:3001](http://localhost:30
 - `npm run build` - Build the application for production
 - `npm run start` - Start the production server
 - `npm run lint` - Run ESLint for code linting
+- `npm test` - Run the unit test suite
 
 ## Deployment
 
@@ -75,6 +76,15 @@ cloud-v3/
 ## Environment Variables
 
 Environment variables can override settings and secrets in the `config.ts` file.
+
+## Testing
+
+Run the unit tests with:
+
+```bash
+npm test
+npm run test:coverage
+```
 
 ## License
 

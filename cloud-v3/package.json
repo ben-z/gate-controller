@@ -10,7 +10,9 @@
     "start": "next start",
     "prod:redis": "mkdir -p /data/redis && redis-server ${REDIS_CONFIG_FILE} --daemonize yes",
     "prod:all": "npm run prod:redis && npm run start -- -H 0.0.0.0",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -37,6 +39,9 @@
     "eslint-config-next": "15.2.4",
     "redis-memory-server": "^0.12.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^4.2.0",
+    "vitest": "^1.4.0",
+    "@vitest/coverage-v8": "^1.4.0"
   }
 }
