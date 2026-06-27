@@ -5,3 +5,8 @@ export interface Schedule {
   enabled: boolean;
   created_by?: string;
 }
+
+export type ScheduleInput = Pick<
+  Schedule,
+  'name' | 'cron_expression' | 'action' | 'enabled'
+>;

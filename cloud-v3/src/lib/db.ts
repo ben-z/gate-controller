@@ -11,23 +11,39 @@ import {
 import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 import crypto from "crypto";
-import { mkdir } from "fs/promises";
+import { mkdirSync } from "fs";
 import path from "path";
 
 const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 30; // 30 days
 
-// MARK: Ensure data directory exists
-await mkdir(path.dirname(config.dbPath), { recursive: true });
+type UserRow = Omit<User, "created_by"> & { created_by: string | null };
+type ScheduleRow = Omit<Schedule, "enabled" | "created_by"> & {
+  enabled: 0 | 1;
+  created_by: string | null;
+};
+type CountRow = { count: number };
+type DatabaseConnection = Database.Database;
+type Statements = ReturnType<typeof prepareStatements>;
 
-const db = new Database(config.dbPath);
+type DbRuntime = {
+  db: DatabaseConnection;
+  statements: Statements;
+};
 
-// MARK: Initialize database
+const globalForDb = globalThis as typeof globalThis & {
+  gateDbRuntime?: DbRuntime;
+};
 
-// Enable foreign keys
-db.pragma("foreign_keys = ON");
+function getRuntime(): DbRuntime {
+  if (!globalForDb.gateDbRuntime) {
+    mkdirSync(path.dirname(config.dbPath), { recursive: true });
 
-// Create tables
-db.exec(`
+    const db = new Database(config.dbPath);
+    db.pragma("foreign_keys = ON");
+    db.pragma("journal_mode = WAL");
+    db.pragma("busy_timeout = 5000");
+
+    db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
@@ -65,10 +81,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_by TEXT
 );
-`);
 
-// Create indexes
-db.exec(`
 CREATE INDEX IF NOT EXISTS idx_gate_history_timestamp ON gate_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_schedules_created_by ON schedules(created_by);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -76,68 +89,111 @@ CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `);
 
-// MARK: Bootstrap database
-function bootstrapDB() {
-  // Initialize gate history if it doesn't exist
-  const gateHistoryCount = countGateHistoryStmt.get() as { count: number };
+    const runtime = { db, statements: prepareStatements(db) };
+
+    bootstrapDB(runtime);
+    globalForDb.gateDbRuntime = runtime;
+  }
+
+  return globalForDb.gateDbRuntime;
+}
+
+function prepareStatements(db: DatabaseConnection) {
+  return {
+    countGateHistory: db.prepare("SELECT COUNT(*) as count FROM gate_history"),
+    getLatestHistory: db.prepare(
+      "SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 1"
+    ),
+    getHistory: db.prepare(
+      "SELECT action, timestamp, actor, actor_name FROM gate_history ORDER BY timestamp DESC LIMIT 50"
+    ),
+    insertHistory: db.prepare(
+      "INSERT INTO gate_history (action, timestamp, actor, actor_name) VALUES (?, ?, ?, ?)"
+    ),
+    countLastContact: db.prepare("SELECT COUNT(*) as count FROM last_contact"),
+    getLastContact: db.prepare("SELECT timestamp FROM last_contact WHERE id = 1"),
+    updateLastContact: db.prepare(
+      "UPDATE last_contact SET timestamp = ? WHERE id = 1"
+    ),
+    countUsers: db.prepare("SELECT COUNT(*) as count FROM users"),
+    getUsers: db.prepare("SELECT * FROM users ORDER BY created_at DESC"),
+    getUserByUsername: db.prepare("SELECT * FROM users WHERE username = ?"),
+    insertUser: db.prepare(`
+      INSERT INTO users (username, password_hash, role, created_at, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `),
+    insertBootstrapUser: db.prepare(`
+      INSERT OR IGNORE INTO users (username, password_hash, role, created_at, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `),
+    updateUser: db.prepare(`
+      UPDATE users
+      SET password_hash = ?, role = ?
+      WHERE username = ?
+    `),
+    deleteUser: db.prepare("DELETE FROM users WHERE username = ?"),
+    insertSession: db.prepare(`
+      INSERT INTO sessions (session_key, username, created_at, expires_at)
+      VALUES (?, ?, ?, ?)
+    `),
+    updateSession: db.prepare(`
+      UPDATE sessions
+      SET expires_at = ?
+      WHERE session_key = ?
+    `),
+    getSession: db.prepare("SELECT * FROM sessions WHERE session_key = ?"),
+    deleteSession: db.prepare("DELETE FROM sessions WHERE session_key = ?"),
+    deleteSessionsByUsername: db.prepare("DELETE FROM sessions WHERE username = ?"),
+    countAdmins: db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'"),
+    getSchedules: db.prepare("SELECT * FROM schedules ORDER BY created_at DESC"),
+    getSchedule: db.prepare("SELECT * FROM schedules WHERE name = ?"),
+    insertSchedule: db.prepare(`
+      INSERT INTO schedules (name, cron_expression, action, enabled, created_at, created_by)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+    `),
+    updateSchedule: db.prepare(`
+      UPDATE schedules
+      SET cron_expression = ?, action = ?, enabled = ?, created_by = ?
+      WHERE name = ?
+    `),
+    deleteSchedule: db.prepare("DELETE FROM schedules WHERE name = ?"),
+  };
+}
+
+function bootstrapDB({ db, statements }: DbRuntime) {
+  const gateHistoryCount = statements.countGateHistory.get() as CountRow;
   if (gateHistoryCount.count === 0) {
-    db.exec(`
-    INSERT INTO gate_history (action, timestamp, actor) 
-    VALUES ('close', ${Date.now()}, 'system');
-  `);
+    statements.insertHistory.run("close", Date.now(), "system", null);
   }
 
-  // Initialize last contact if it doesn't exist
-  const lastContactCount = countLastContactStmt.get() as { count: number };
+  const lastContactCount = statements.countLastContact.get() as CountRow;
   if (lastContactCount.count === 0) {
-    db.exec(`
-    INSERT INTO last_contact (id, timestamp) 
-    VALUES (1, 0);
-  `);
+    db.prepare(
+      "INSERT OR IGNORE INTO last_contact (id, timestamp) VALUES (1, 0)"
+    ).run();
   }
 
-  // Initialize admin account if no users exist
-  const userCount = countUsersStmt.get() as { count: number };
+  const userCount = statements.countUsers.get() as CountRow;
   if (userCount.count === 0) {
     const { username, password } = secrets.initialAdminCredentials;
-    const salt = bcrypt.genSaltSync(10);
-    const passwordHash = bcrypt.hashSync(password, salt);
-    const now = Date.now();
-
-    insertUserStmt.run(username, passwordHash, "admin", now);
+    const passwordHash = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
+    statements.insertBootstrapUser.run(
+      username,
+      passwordHash,
+      "admin",
+      Date.now(),
+      null
+    );
   }
 }
 
-// MARK: Gate Status
-const countGateHistoryStmt = db.prepare(
-  "SELECT COUNT(*) as count FROM gate_history"
-);
-const getLatestHistoryStmt = db.prepare(
-  "SELECT action, timestamp FROM gate_history ORDER BY timestamp DESC LIMIT 1"
-);
-const getHistoryStmt = db.prepare(
-  "SELECT action, timestamp, actor, actor_name FROM gate_history ORDER BY timestamp DESC LIMIT 50"
-);
-const insertHistoryStmt = db.prepare(
-  "INSERT INTO gate_history (action, timestamp, actor, actor_name) VALUES (?, ?, ?, ?)"
-);
-const countLastContactStmt = db.prepare(
-  "SELECT COUNT(*) as count FROM last_contact"
-);
-const getLastContactStmt = db.prepare(
-  "SELECT timestamp FROM last_contact WHERE id = 1"
-);
-const updateLastContactStmt = db.prepare(
-  "UPDATE last_contact SET timestamp = ? WHERE id = 1"
-);
-
 export function getGateStatus(includeHistory: boolean = false): GateStatus {
-  const latest = getLatestHistoryStmt.get() as {
+  const { statements } = getRuntime();
+  const latest = statements.getLatestHistory.get() as {
     action: "open" | "close";
     timestamp: number;
   };
-
-  const lastContact = getLastContactStmt.get() as { timestamp: number };
+  const lastContact = statements.getLastContact.get() as { timestamp: number };
 
   const result: GateStatus = {
     status: latest.action === "open" ? "open" : "closed",
@@ -145,7 +201,7 @@ export function getGateStatus(includeHistory: boolean = false): GateStatus {
   };
 
   if (includeHistory) {
-    result.history = getHistoryStmt.all() as HistoryEntry[];
+    result.history = statements.getHistory.all() as HistoryEntry[];
   }
 
   return result;
@@ -156,126 +212,62 @@ export function updateGateStatus(
   actor: "user" | "schedule" | "system" = "user",
   actor_name?: string
 ): void {
-  const now = Date.now();
-
-  // Add to history
-  insertHistoryStmt.run(
+  getRuntime().statements.insertHistory.run(
     newAction,
-    now,
+    Date.now(),
     actor,
-    actor_name
+    actor_name ?? null
   );
 }
 
 export function updateLastContact(): void {
-  updateLastContactStmt.run(Date.now());
+  getRuntime().statements.updateLastContact.run(Date.now());
 }
-
-// MARK: Users
-const countUsersStmt = db.prepare("SELECT COUNT(*) as count FROM users");
-const getUsersStmt = db.prepare("SELECT * FROM users ORDER BY created_at DESC");
-const getUserByUsernameStmt = db.prepare(
-  "SELECT * FROM users WHERE username = ?"
-);
-const getUserStmt = db.prepare("SELECT * FROM users WHERE username = ?");
-const insertUserStmt = db.prepare(`
-  INSERT INTO users (username, password_hash, role, created_at)
-  VALUES (?, ?, ?, ?)
-`);
-const updateUserStmt = db.prepare(`
-  UPDATE users 
-  SET password_hash = ?, role = ?
-  WHERE username = ?
-`);
-const deleteUserStmt = db.prepare("DELETE FROM users WHERE username = ?");
-const insertSessionStmt = db.prepare(`
-  INSERT INTO sessions (session_key, username, created_at, expires_at)
-  VALUES (?, ?, ?, ?)
-`);
-const updateSessionStmt = db.prepare(`
-  UPDATE sessions 
-  SET session_key = ?, username = ?, created_at = ?, expires_at = ?
-  WHERE session_key = ?
-`);
-const getSessionStmt = db.prepare(
-  "SELECT * FROM sessions WHERE session_key = ?"
-);
-const deleteSessionStmt = db.prepare(
-  "DELETE FROM sessions WHERE session_key = ?"
-);
-const deleteSessionsByUsernameStmt = db.prepare(
-  "DELETE FROM sessions WHERE username = ?"
-);
 
 export function getUsers(): User[] {
-  return (getUsersStmt.all() as User[]).map((user) => ({
-    username: user.username,
-    role: user.role,
-    created_at: user.created_at,
-    created_by: user.created_by,
-  }));
-}
-
-export function getUser(id: number): User | null {
-  const user = getUserStmt.get(id) as User | undefined;
-  return user
-    ? {
-        username: user.username,
-        role: user.role,
-        created_at: user.created_at,
-        created_by: user.created_by,
-      }
-    : null;
+  return (getRuntime().statements.getUsers.all() as UserRow[]).map(toPublicUser);
 }
 
 export async function authenticateUser(
   username: string,
   password: string
 ): Promise<{ user: User; session: Session } | null> {
+  const { statements } = getRuntime();
   const now = Date.now();
-
-  const user = getUserByUsernameStmt.get(username) as
-    | (UserCredentials & User)
+  const user = statements.getUserByUsername.get(username) as
+    | (UserCredentials & UserRow)
     | undefined;
   if (!user) return null;
 
-  if (await bcrypt.compare(password, user.password_hash)) {
-    const sessionKey = crypto.randomBytes(32).toString("hex");
-    insertSessionStmt.run(
-      sessionKey,
-      user.username,
-      now,
-      now + SESSION_EXPIRATION_TIME
-    );
-
-    return {
-      user: {
-        username: user.username,
-        role: user.role,
-        created_at: user.created_at,
-        created_by: user.created_by,
-      },
-      session: {
-        session_key: sessionKey,
-        username: user.username,
-        created_at: now,
-        expires_at: now + SESSION_EXPIRATION_TIME,
-      },
-    };
+  if (!(await bcrypt.compare(password, user.password_hash))) {
+    return null;
   }
 
-  return null;
+  const sessionKey = crypto.randomBytes(32).toString("hex");
+  const expiresAt = now + SESSION_EXPIRATION_TIME;
+  statements.insertSession.run(sessionKey, user.username, now, expiresAt);
+
+  return {
+    user: toPublicUser(user),
+    session: {
+      session_key: sessionKey,
+      username: user.username,
+      created_at: now,
+      expires_at: expiresAt,
+    },
+  };
 }
 
 export function deleteSession(sessionKey: string): void {
-  deleteSessionStmt.run(sessionKey);
+  getRuntime().statements.deleteSession.run(sessionKey);
 }
 
 export function refreshSession(
   sessionKey: string
 ): { user: User; session: Session } | null {
+  const { statements } = getRuntime();
   const now = Date.now();
-  const session = getSessionStmt.get(sessionKey) as Session | undefined;
+  const session = statements.getSession.get(sessionKey) as Session | undefined;
   if (!session) return null;
 
   if (session.expires_at < now) {
@@ -283,41 +275,39 @@ export function refreshSession(
     return null;
   }
 
-  const user = getUserByUsernameStmt.get(session.username) as User | undefined;
+  const user = statements.getUserByUsername.get(session.username) as
+    | UserRow
+    | undefined;
   if (!user) {
-    throw new Error(`User not found: ${session.username}. This should never happen because we have a foreign key constraint on the sessions table.`);
+    throw new Error(`Session references missing user: ${session.username}`);
   }
 
-  updateSessionStmt.run(
-    sessionKey,
-    session.username,
-    session.created_at,
-    now + SESSION_EXPIRATION_TIME,
-    sessionKey
-  );
+  const expiresAt = now + SESSION_EXPIRATION_TIME;
+  statements.updateSession.run(expiresAt, sessionKey);
 
   return {
-    user: {
-      username: session.username,
-      role: user.role,
-      created_at: user.created_at,
-      created_by: user.created_by,
-    },
+    user: toPublicUser(user),
     session: {
       session_key: sessionKey,
       username: session.username,
       created_at: session.created_at,
-      expires_at: now + SESSION_EXPIRATION_TIME,
+      expires_at: expiresAt,
     },
   };
 }
 
 export function createUser(user: CreateUserParams): User {
+  const { statements } = getRuntime();
   const now = Date.now();
-  const salt = bcrypt.genSaltSync(10);
-  const passwordHash = bcrypt.hashSync(user.password, salt);
+  const passwordHash = bcrypt.hashSync(user.password, bcrypt.genSaltSync(10));
 
-  insertUserStmt.run(user.username, passwordHash, user.role, now);
+  statements.insertUser.run(
+    user.username,
+    passwordHash,
+    user.role,
+    now,
+    user.created_by ?? null
+  );
 
   return {
     username: user.username,
@@ -328,53 +318,53 @@ export function createUser(user: CreateUserParams): User {
 }
 
 export function updateUser(user: UpdateUserParams): void {
-  const existing = getUserByUsernameStmt.get(user.username) as (User & UserCredentials) | undefined;
+  const { statements } = getRuntime();
+  const existing = statements.getUserByUsername.get(user.username) as
+    | (UserRow & UserCredentials)
+    | undefined;
   if (!existing) throw new Error(`User not found: ${user.username}`);
 
-  const passwordHash = user.password ? bcrypt.hashSync(user.password, bcrypt.genSaltSync(10)) : existing.password_hash;
-
-  updateUserStmt.run(passwordHash, user.role, user.username);
+  const passwordHash = user.password
+    ? bcrypt.hashSync(user.password, bcrypt.genSaltSync(10))
+    : existing.password_hash;
+  statements.updateUser.run(passwordHash, user.role ?? existing.role, user.username);
 }
 
 export function deleteUser(username: string): void {
-  // Clear sessions for this user
-  deleteSessionsByUsernameStmt.run(username);
+  const { statements } = getRuntime();
+  const existing = statements.getUserByUsername.get(username) as
+    | UserRow
+    | undefined;
+  if (!existing) throw new Error(`User not found: ${username}`);
 
-  deleteUserStmt.run(username);
+  if (existing.role === "admin") {
+    const adminCount = statements.countAdmins.get() as CountRow;
+    if (adminCount.count <= 1) {
+      throw new Error("Cannot delete the last admin user");
+    }
+  }
+
+  statements.deleteSessionsByUsername.run(username);
+  statements.deleteUser.run(username);
 }
 
-// MARK: Schedules
-const getSchedulesStmt = db.prepare(
-  "SELECT * FROM schedules ORDER BY created_at DESC"
-);
-
-const getScheduleStmt = db.prepare("SELECT * FROM schedules WHERE name = ?");
-const insertScheduleStmt = db.prepare(`
-  INSERT INTO schedules (name, cron_expression, action, enabled, created_at, created_by)
-  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-`);
-
-const updateScheduleStmt = db.prepare(`
-  UPDATE schedules
-  SET cron_expression = ?, action = ?, enabled = ?, created_by = ?
-  WHERE name = ?
-`);
-
-const deleteScheduleStmt = db.prepare("DELETE FROM schedules WHERE name = ?");
-
 export function getSchedules(): Schedule[] {
-  return getSchedulesStmt.all() as Schedule[];
+  return (getRuntime().statements.getSchedules.all() as ScheduleRow[]).map(
+    rowToSchedule
+  );
 }
 
 export function getSchedule(name: string): Schedule | null {
-  const schedule = getScheduleStmt.get(name) as Schedule | undefined;
-  return schedule || null;
+  const schedule = getRuntime().statements.getSchedule.get(name) as
+    | ScheduleRow
+    | undefined;
+  return schedule ? rowToSchedule(schedule) : null;
 }
 
 export function createSchedule(
   schedule: Omit<Schedule, "name"> & { created_by: string; name: string }
 ): Schedule {
-  insertScheduleStmt.run(
+  getRuntime().statements.insertSchedule.run(
     schedule.name,
     schedule.cron_expression,
     schedule.action,
@@ -387,7 +377,7 @@ export function createSchedule(
     cron_expression: schedule.cron_expression,
     action: schedule.action,
     enabled: schedule.enabled,
-    created_by: schedule.created_by
+    created_by: schedule.created_by,
   };
 }
 
@@ -401,10 +391,10 @@ export function updateSchedule(
   const updatedSchedule = {
     ...existing,
     ...updates,
-    name // Keep the original name as it's the primary key
+    name,
   };
 
-  updateScheduleStmt.run(
+  getRuntime().statements.updateSchedule.run(
     updatedSchedule.cron_expression,
     updatedSchedule.action,
     updatedSchedule.enabled ? 1 : 0,
@@ -416,12 +406,27 @@ export function updateSchedule(
 }
 
 export function deleteSchedule(name: string): void {
-  const result = deleteScheduleStmt.run(name);
+  const result = getRuntime().statements.deleteSchedule.run(name);
   if (result.changes === 0) {
     throw new Error(`Schedule not found: ${name}`);
   }
 }
 
-bootstrapDB();
+function rowToSchedule(row: ScheduleRow): Schedule {
+  return {
+    name: row.name,
+    cron_expression: row.cron_expression,
+    action: row.action,
+    enabled: Boolean(row.enabled),
+    created_by: row.created_by ?? undefined,
+  };
+}
 
-export default db;
+function toPublicUser(user: UserRow): User {
+  return {
+    username: user.username,
+    role: user.role,
+    created_at: user.created_at,
+    created_by: user.created_by ?? undefined,
+  };
+}

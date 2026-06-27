@@ -1,48 +1,35 @@
 import { NextRequest } from 'next/server';
-import { ensureSession } from '@/lib/auth/ensure-session';
 import { getUsers, createUser, updateUser, deleteUser } from '@/lib/db';
+import {
+  ApiError,
+  apiError,
+  optionalString,
+  readJsonBody,
+  requireAdminSession,
+  requireObject,
+  requireString,
+} from '@/lib/api';
 
-// Get all users
 export async function GET() {
   try {
-    // Ensure user is authenticated and is admin
-    const { user } = await ensureSession();
-    if (user.role !== 'admin') {
-      return new Response('Unauthorized', { status: 403 });
-    }
-
-    // Get users
+    await requireAdminSession();
     const users = getUsers();
 
     return Response.json(users);
   } catch (error) {
-    console.error('Error getting users:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return apiError(error, 'Error getting users:');
   }
 }
 
-// Create new user
 export async function POST(request: NextRequest) {
   try {
-    // Ensure user is authenticated and is admin
-    const { user } = await ensureSession();
-    if (user.role !== 'admin') {
-      return new Response('Unauthorized', { status: 403 });
-    }
+    const { user } = await requireAdminSession();
 
-    // Get request body
-    const body = await request.json();
-    const { username, password, role } = body;
+    const body = requireObject(await readJsonBody(request));
+    const username = requireString(body, 'username');
+    const password = requireString(body, 'password');
+    const role = requireRole(body.role);
 
-    if (!username || !password || !role) {
-      return new Response('Missing required fields', { status: 400 });
-    }
-
-    if (role !== 'admin' && role !== 'user') {
-      return new Response('Invalid role', { status: 400 });
-    }
-
-    // Create user
     const newUser = createUser({
       username,
       password,
@@ -52,33 +39,18 @@ export async function POST(request: NextRequest) {
 
     return Response.json(newUser);
   } catch (error) {
-    console.error('Error creating user:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return apiError(error, 'Error creating user:');
   }
 }
 
-// Update user
 export async function PUT(request: NextRequest) {
   try {
-    // Ensure user is authenticated and is admin
-    const { user } = await ensureSession();
-    if (user.role !== 'admin') {
-      return new Response('Unauthorized', { status: 403 });
-    }
+    await requireAdminSession();
+    const body = requireObject(await readJsonBody(request));
+    const username = requireString(body, 'username');
+    const password = optionalString(body, 'password');
+    const role = body.role === undefined ? undefined : requireRole(body.role);
 
-    // Get request body
-    const body = await request.json();
-    const { username, password, role } = body;
-
-    if (!username) {
-      return new Response('Missing username', { status: 400 });
-    }
-
-    if (role && role !== 'admin' && role !== 'user') {
-      return new Response('Invalid role', { status: 400 });
-    }
-
-    // Update user
     updateUser({
       username,
       password,
@@ -87,39 +59,37 @@ export async function PUT(request: NextRequest) {
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error('Error updating user:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return apiError(error, 'Error updating user:');
   }
 }
 
-// Delete user
 export async function DELETE(request: NextRequest) {
   try {
-    // Ensure user is authenticated and is admin
-    const { user } = await ensureSession();
-    if (user.role !== 'admin') {
-      return new Response('Unauthorized', { status: 403 });
-    }
+    await requireAdminSession();
 
-    // Get username from URL
     const username = request.nextUrl.searchParams.get('username');
     if (!username) {
-      return new Response('Missing username', { status: 400 });
+      throw new ApiError(400, 'Missing username');
     }
 
-    // Delete user
     try {
       deleteUser(username);
     } catch (error) {
-      if (error instanceof ReferenceError) {
-        return new Response(error.message, { status: 400 });
+      if (error instanceof Error) {
+        throw new ApiError(400, error.message);
       }
       throw error;
     }
 
     return new Response(null, { status: 204 });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return apiError(error, 'Error deleting user:');
   }
-} 
+}
+
+function requireRole(value: unknown): 'admin' | 'user' {
+  if (value !== 'admin' && value !== 'user') {
+    throw new ApiError(400, 'Invalid role');
+  }
+  return value;
+}

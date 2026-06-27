@@ -1,4 +1,4 @@
-# Gate Controller Cloud v3
+# Gate Controller Cloud
 
 A Next.js-based web application for controlling and monitoring gates.
 
@@ -47,7 +47,15 @@ The application will be available at [http://localhost:3001](http://localhost:30
 - `npm run dev:all` - Start both Next.js and Redis servers concurrently
 - `npm run build` - Build the application for production
 - `npm run start` - Start the production server
-- `npm run lint` - Run ESLint for code linting
+- `npm run lint` - Run ESLint
+- `npm run typecheck` - Run TypeScript without emitting files
+- `npm run e2e` - Build the app and run browser E2E tests against isolated SQLite and Redis
+
+If the Playwright browser download is unavailable locally, use an installed Chrome:
+
+```bash
+PLAYWRIGHT_BROWSER_CHANNEL=chrome npm run e2e
+```
 
 ## Deployment
 
@@ -75,6 +83,9 @@ cloud-v3/
 ## Environment Variables
 
 Environment variables can override settings and secrets in the `config.ts` file.
+
+- `INITIAL_ADMIN_CREDENTIALS`: JSON object used to create the first admin user, for example `{"username":"admin","password":"..."}`.
+- `AGENT_TOKEN`: optional bearer token required by `/api/gate/take_status` when set. Match this with `GATE_CONTROLLER_AGENT_TOKEN` on the agent.
 
 ## License
 

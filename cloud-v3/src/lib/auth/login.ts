@@ -22,7 +22,8 @@ export async function login(
   cookieStore.set("session_key", authResult.session.session_key, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    maxAge: authResult.session.expires_at - Date.now(),
+    sameSite: "lax",
+    maxAge: Math.floor((authResult.session.expires_at - Date.now()) / 1000),
     path: "/",
   });
 

@@ -1,3 +1,6 @@
 # Gate Controller
 
-Just a set of tools for controlling on/off switches. For personal use. README files are available in each directory.
+Personal gate control stack:
+
+- `cloud-v3/`: the only active cloud app.
+- `agent/`: Raspberry Pi relay poller that applies the cloud app's current gate state.
