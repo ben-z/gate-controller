@@ -48,6 +48,10 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await login(page, admin.username, admin.password);
 
   await expect(page.getByRole("heading", { name: "Gate Controller" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+  await page.getByText("Show").click();
+  await expect(page.getByText("Controller timezone")).toBeVisible();
+  await expect(page.getByText("Agent auth")).toBeVisible();
   await expect(page.getByText("CLOSED")).toBeVisible();
 
   await page.getByRole("button", { name: "Open Gate" }).click();
@@ -91,6 +95,7 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   const userPage = await userContext.newPage();
   await login(userPage, username, password);
   await expect(userPage.getByRole("heading", { name: "User Management" })).toHaveCount(0);
+  await expect(userPage.getByRole("heading", { name: "Diagnostics" })).toHaveCount(0);
   await expect((await browserJson(userPage, "/api/users")).status).toBe(403);
   await userContext.close();
 

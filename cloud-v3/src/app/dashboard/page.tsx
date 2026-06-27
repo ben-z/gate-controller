@@ -3,6 +3,7 @@ import { ensureSession } from "@/lib/auth/ensure-session";
 import { GateController } from "@/components/gate-controller";
 import { ScheduleManager } from "@/components/schedule-manager";
 import { UserManagement } from "@/components/user-management";
+import { DiagnosticsPanel } from "@/components/diagnostics-panel";
 import { getInitialData } from "@/lib/data";
 import { SWRConfig } from "swr";
 
@@ -51,9 +52,15 @@ export default async function DashboardPage() {
 
             {/* User Management Section (Admin only) */}
             {user.role === 'admin' && (
-              <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                <UserManagement />
-              </section>
+              <>
+                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                  <UserManagement />
+                </section>
+
+                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                  <DiagnosticsPanel />
+                </section>
+              </>
             )}
 
             {/* Logout Button */}
