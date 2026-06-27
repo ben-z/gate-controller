@@ -4,6 +4,7 @@ import time
 import sys
 import socket
 import logging
+import os
 import sentry_sdk
 from sentry_sdk.crons import monitor
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -52,8 +53,13 @@ def loop_once():
         # url = 'http://100.106.129.114:8081/api/take_command' # for debugging
         url = "https://gate-controller-cloud-v3.benzhang.dev/api/gate/take_status"
         data = {'host': hostname}
+        headers = {}
+        token = os.environ.get("GATE_CONTROLLER_AGENT_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
-        response = requests.post(url, json=data, timeout=5)
+        response = requests.post(url, json=data, headers=headers, timeout=5)
+        response.raise_for_status()
 
         command = response.json().get('status')
         if command is None:

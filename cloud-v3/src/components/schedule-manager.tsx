@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { useSchedules, createSchedule, updateSchedule, deleteSchedule } from '@/hooks/useSchedules';
 import cronstrue from 'cronstrue';
-import { Schedule } from '@/types/schedule';
+import { Schedule, ScheduleInput } from '@/types/schedule';
 
-const DEFAULT_FORM_DATA: Partial<Schedule> = Object.freeze({
+const DEFAULT_FORM_DATA: ScheduleInput = Object.freeze({
   name: '',
   cron_expression: '',
   action: 'close',
@@ -17,7 +17,7 @@ export function ScheduleManager() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Partial<Schedule>>(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState<ScheduleInput>(DEFAULT_FORM_DATA);
   const [cronError, setCronError] = useState<string | null>(null);
 
   const validateCronExpression = (expression: string): boolean => {
@@ -33,17 +33,25 @@ export function ScheduleManager() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (!validateCronExpression(formData.cron_expression)) {
+      return;
+    }
+
     try {
       if (editingName) {
         await updateSchedule(editingName, formData);
       } else {
-        await createSchedule(formData as Schedule);
+        await createSchedule(formData);
       }
       setEditingName(null);
+      setIsFormOpen(false);
       setFormData(DEFAULT_FORM_DATA);
-      mutate();
+      await mutate();
     } catch (error) {
       console.error('Failed to save schedule:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save schedule');
     }
   };
 
@@ -74,6 +82,7 @@ export function ScheduleManager() {
     setIsFormOpen(false);
     setEditingName(null);
     setFormData(DEFAULT_FORM_DATA);
+    setCronError(null);
   };
 
   const handleCronChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,15 +138,16 @@ export function ScheduleManager() {
         {isFormOpen && (
           <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
             <div>
-              <label className="block text-sm font-medium mb-1">Name</label>
+              <label htmlFor="schedule-name" className="block text-sm font-medium mb-1">Name</label>
               <input
+                id="schedule-name"
                 type="text"
                 value={formData.name}
                 disabled={!!editingName}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 ${
-                  !!editingName 
-                    ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400' 
+                  !!editingName
+                    ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'
                     : 'border-gray-300 dark:border-gray-700'
                 }`}
                 required
@@ -151,8 +161,9 @@ export function ScheduleManager() {
               }
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Cron Expression</label>
+              <label htmlFor="schedule-cron-expression" className="block text-sm font-medium mb-1">Cron Expression</label>
               <input
+                id="schedule-cron-expression"
                 type="text"
                 value={formData.cron_expression}
                 onChange={handleCronChange}
@@ -174,8 +185,9 @@ export function ScheduleManager() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Action</label>
+              <label htmlFor="schedule-action" className="block text-sm font-medium mb-1">Action</label>
               <select
+                id="schedule-action"
                 value={formData.action}
                 onChange={(e) => setFormData({ ...formData, action: e.target.value as 'open' | 'close' })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
@@ -289,4 +301,4 @@ export function ScheduleManager() {
       </div>
     </div>
   );
-} 
+}

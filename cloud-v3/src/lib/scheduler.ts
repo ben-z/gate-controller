@@ -9,45 +9,61 @@ const REDIS_CONNECTION_CONFIG = {
   port: config.redis.port,
 };
 
-// Create a queue for gate control jobs
-const gateQueue = new Queue("gate-control", {
-  connection: REDIS_CONNECTION_CONFIG,
-});
+type SchedulerRuntime = {
+  queue: Queue;
+  worker: Worker;
+  queueEvents: QueueEvents;
+};
 
-// Create a worker to process the jobs
-new Worker(
-  gateQueue.name,
-  async (job) => {
-    console.log(`Executing schedule: ${job.data.scheduleName}`);
+const globalForScheduler = globalThis as typeof globalThis & {
+  gateSchedulerRuntime?: SchedulerRuntime;
+};
 
-    // Here we fetch the schedule from the database again to be extra sure that the job is valid.
-    const schedule = await getSchedule(job.data.scheduleName);
-    if (!schedule) {
-      throw new Error(
-        `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
-      );
-    }
-    if (schedule.action !== job.data.action) {
-      throw new Error(
-        `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
-      );
-    }
-    await updateGateStatus(schedule.action, "schedule", schedule.name);
-  },
-  {
-    connection: REDIS_CONNECTION_CONFIG,
+function getSchedulerRuntime(): SchedulerRuntime {
+  if (!globalForScheduler.gateSchedulerRuntime) {
+    const queue = new Queue("gate-control", {
+      connection: REDIS_CONNECTION_CONFIG,
+    });
+
+    const worker = new Worker(
+      queue.name,
+      async (job) => {
+        console.log(`Executing schedule: ${job.data.scheduleName}`);
+
+        const schedule = getSchedule(job.data.scheduleName);
+        if (!schedule) {
+          throw new Error(
+            `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
+          );
+        }
+        if (schedule.action !== job.data.action) {
+          throw new Error(
+            `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
+          );
+        }
+        updateGateStatus(schedule.action, "schedule", schedule.name);
+      },
+      {
+        connection: REDIS_CONNECTION_CONFIG,
+      }
+    );
+
+    const queueEvents = new QueueEvents(queue.name, {
+      connection: REDIS_CONNECTION_CONFIG,
+    });
+    queueEvents.on("failed", ({ jobId, failedReason }) => {
+      console.error(`Job ${jobId} failed:`, failedReason);
+    });
+
+    globalForScheduler.gateSchedulerRuntime = {
+      queue,
+      worker,
+      queueEvents,
+    };
   }
-);
 
-// Create queue events listener
-const queueEvents = new QueueEvents(gateQueue.name, {
-  connection: REDIS_CONNECTION_CONFIG,
-});
-
-// Log failed jobs
-queueEvents.on("failed", ({ jobId, failedReason }) => {
-  console.error(`Job ${jobId} failed:`, failedReason);
-});
+  return globalForScheduler.gateSchedulerRuntime;
+}
 
 /**
  * Validates a cron expression
@@ -67,9 +83,10 @@ export function validateCronExpression(expression: string): boolean {
  */
 export async function startSchedule(schedule: Schedule): Promise<void> {
   console.log(`Starting schedule: ${schedule.name}`);
+  const { queue } = getSchedulerRuntime();
 
   // Create or update the job scheduler
-  await gateQueue.upsertJobScheduler(
+  await queue.upsertJobScheduler(
     `schedule-${schedule.name}`,
     {
       pattern: schedule.cron_expression,
@@ -96,7 +113,8 @@ export async function startSchedule(schedule: Schedule): Promise<void> {
  */
 export async function stopSchedule(name: string): Promise<void> {
   console.log(`Stopping schedule: ${name}`);
-  await gateQueue.removeJobScheduler(`schedule-${name}`);
+  const { queue } = getSchedulerRuntime();
+  await queue.removeJobScheduler(`schedule-${name}`);
 }
 
 /**
@@ -107,11 +125,9 @@ export async function initializeSchedules(
 ): Promise<void> {
   console.log(`Initializing ${schedules.length} schedules...`);
 
-  for (const schedule of schedules) {
-    if (schedule.enabled) {
-      await startSchedule(schedule);
-    }
-  }
+  await Promise.all(
+    schedules.filter((schedule) => schedule.enabled).map(startSchedule)
+  );
 }
 
 /**
@@ -131,22 +147,34 @@ export async function updateSchedule(schedule: Schedule): Promise<void> {
 export async function getUpcomingSchedules(
   schedules: Schedule[]
 ): Promise<Array<{ schedule: Schedule; nextExecution: Date }>> {
-  const delayedJobs = await gateQueue.getDelayed();
+  const { queue } = getSchedulerRuntime();
+  const scheduleByName = new Map(
+    schedules
+      .filter((schedule) => schedule.enabled)
+      .map((schedule) => [schedule.name, schedule])
+  );
+  const delayedJobs = await queue.getDelayed();
 
-  const upcoming = delayedJobs.map((job) => {
+  const upcoming = delayedJobs.flatMap((job) => {
     const scheduleName = job.data.scheduleName;
-    const nextExecution = job.opts.timestamp + job.opts.delay;
-    const schedule = schedules.find((s) => s.name === scheduleName);
+    const schedule = scheduleByName.get(scheduleName);
 
     if (!schedule) {
-      throw new Error(`Schedule "${scheduleName}" not found`);
+      return [];
+    }
+
+    const nextExecution = (job.opts.timestamp ?? 0) + (job.opts.delay ?? 0);
+    if (!Number.isFinite(nextExecution) || nextExecution <= 0) {
+      return [];
     }
 
     return {
       schedule,
-      nextExecution,
+      nextExecution: new Date(nextExecution),
     };
   });
 
-  return upcoming;
+  return upcoming.sort(
+    (a, b) => a.nextExecution.getTime() - b.nextExecution.getTime()
+  );
 }

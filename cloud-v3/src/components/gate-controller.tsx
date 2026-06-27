@@ -3,7 +3,7 @@
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
 import { TimeDisplay, TimeFormat } from '@/components/time-display';
 import { UpcomingSchedules } from '@/components/upcoming-schedules';
-import { config } from '@/config';
+import { publicConfig } from '@/config';
 import { useState, useEffect } from 'react';
 
 export function GateController() {
@@ -59,10 +59,10 @@ export function GateController() {
         <div className="text-sm text-gray-600 dark:text-gray-400">
           <span>Last gate sync: </span>
           <span className="font-medium">
-            <TimeDisplay 
-              timestamp={gateStatus.lastContactTimestamp} 
-              format="relative" 
-              className={gateStatus.lastContactTimestamp === 0 || Date.now() - gateStatus.lastContactTimestamp > 60000 ? "text-red-500 dark:text-red-400" : ""} 
+            <TimeDisplay
+              timestamp={gateStatus.lastContactTimestamp}
+              format="relative"
+              className={gateStatus.lastContactTimestamp === 0 || Date.now() - gateStatus.lastContactTimestamp > 60000 ? "text-red-500 dark:text-red-400" : ""}
             />
           </span>
         </div>
@@ -123,11 +123,11 @@ export function GateController() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         Time
-                        <select 
+                        <select
                           value={timeFormat}
                           onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
                           className="text-xs bg-transparent border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-                          title={`Select time format (Controller timezone: ${config.controllerTimezone})`}
+                          title={`Select time format (Controller timezone: ${publicConfig.controllerTimezone})`}
                         >
                           <option value="relative">Relative</option>
                           <option value="controller">Controller</option>
@@ -143,7 +143,7 @@ export function GateController() {
                     <tr key={index} className="hover:bg-gray-100 dark:hover:bg-gray-800/50">
                       <td className="px-4 py-2 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          entry.action === 'open' 
+                          entry.action === 'open'
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                         }`}>
@@ -153,7 +153,7 @@ export function GateController() {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         <TimeDisplay
                           timestamp={entry.timestamp}
-                          format={timeFormat === 'relative' ? 'relative' : config.controllerTimezone}
+                          format={timeFormat === 'relative' ? 'relative' : publicConfig.controllerTimezone}
                         />
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
@@ -172,4 +172,4 @@ export function GateController() {
       )}
     </div>
   );
-} 
+}

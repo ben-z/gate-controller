@@ -4,6 +4,6 @@ export async function register() {
     const { initializeApp } = await import('./lib/init');
 
     console.log('Initializing server...');
-    initializeApp();
+    await initializeApp();
   }
-} 
+}

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
 import { User, CreateUserParams } from '@/types/user';
 import { formatInTimeZone } from 'date-fns-tz';
-import { config } from '@/config';
+import { publicConfig } from '@/config';
 
 export function UserManagement() {
   const { users, isLoading, isError, mutate } = useUsers();
@@ -131,8 +131,9 @@ export function UserManagement() {
       {isCreating && (
         <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
           <div>
-            <label className="block text-sm font-medium mb-1">Username</label>
+            <label htmlFor="user-username" className="block text-sm font-medium mb-1">Username</label>
             <input
+              id="user-username"
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -142,10 +143,11 @@ export function UserManagement() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="user-password" className="block text-sm font-medium mb-1">
               {editingUsername ? 'New Password (leave blank to keep current)' : 'Password'}
             </label>
             <input
+              id="user-password"
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -154,8 +156,9 @@ export function UserManagement() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Role</label>
+            <label htmlFor="user-role" className="block text-sm font-medium mb-1">Role</label>
             <select
+              id="user-role"
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
@@ -219,7 +222,7 @@ export function UserManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                    {formatInTimeZone(user.created_at, config.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
+                    {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                     <button
@@ -247,4 +250,4 @@ export function UserManagement() {
       )}
     </div>
   );
-} 
+}

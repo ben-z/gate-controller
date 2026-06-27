@@ -1,0 +1,30 @@
+name: Cloud V3 Checks
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./cloud-v3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: 22.11.0
+          cache: npm
+          cache-dependency-path: cloud-v3/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

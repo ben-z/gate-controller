@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { Schedule } from '@/types/schedule';
+import { Schedule, ScheduleInput } from '@/types/schedule';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -20,22 +20,7 @@ export function useSchedules() {
   };
 }
 
-export function useSchedule(name: string) {
-  const { data, error, isLoading, mutate } = useSWR<Schedule>(
-    name ? `/api/schedules?name=${name}` : null,
-    fetcher
-  );
-
-  return {
-    schedule: data,
-    isLoading,
-    isError: error,
-    mutate,
-  };
-}
-
-// Helper functions for mutations
-export async function createSchedule(schedule: Omit<Schedule, 'name'>) {
+export async function createSchedule(schedule: ScheduleInput) {
   const res = await fetch('/api/schedules', {
     method: 'POST',
     headers: {
@@ -52,8 +37,8 @@ export async function createSchedule(schedule: Omit<Schedule, 'name'>) {
   return res.json();
 }
 
-export async function updateSchedule(name: string, updates: Partial<Omit<Schedule, 'name'>>) {
-  const res = await fetch(`/api/schedules?name=${name}`, {
+export async function updateSchedule(name: string, updates: Partial<ScheduleInput>) {
+  const res = await fetch(`/api/schedules?name=${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -70,7 +55,7 @@ export async function updateSchedule(name: string, updates: Partial<Omit<Schedul
 }
 
 export async function deleteSchedule(name: string) {
-  const res = await fetch(`/api/schedules?name=${name}`, {
+  const res = await fetch(`/api/schedules?name=${encodeURIComponent(name)}`, {
     method: 'DELETE',
   });
 
@@ -78,4 +63,4 @@ export async function deleteSchedule(name: string) {
     const errorData = await res.json();
     throw new Error(errorData.error || `Failed to delete schedule "${name}"`);
   }
-} 
+}

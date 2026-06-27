@@ -1,14 +1,17 @@
 import { getGateStatus, getSchedules, getUsers } from './db';
 import { getUpcomingSchedules } from './scheduler';
 
-export async function getInitialData() {
+export async function getInitialData(includeUsers: boolean) {
   const [gateStatus, schedules, users] = await Promise.all([
     getGateStatus(true),
     getSchedules(),
-    getUsers(),
+    includeUsers ? getUsers() : [],
   ]);
 
-  const upcomingSchedules = await getUpcomingSchedules(schedules);
+  const upcomingSchedules = await getUpcomingSchedules(schedules).catch((error) => {
+    console.error("Failed to preload upcoming schedules:", error);
+    return [];
+  });
 
   return {
     gateStatus,
@@ -16,4 +19,4 @@ export async function getInitialData() {
     users,
     upcomingSchedules,
   };
-} 
+}
