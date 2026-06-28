@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 const port = Number(process.env.PORT ?? 3100);
 
 export default defineConfig({
-  testDir: "./tests/e2e",
+  testDir: "./tests",
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,
