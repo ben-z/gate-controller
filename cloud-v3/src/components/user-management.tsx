@@ -186,68 +186,109 @@ export function UserManagement() {
       )}
 
       {users && users.length > 0 ? (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-100 dark:bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Username
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Created At
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
-              {users.map((user) => (
-                <tr key={user.username}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {user.username}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
-                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                    {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                    <button
-                      onClick={() => handleEdit(user)}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-3"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user.username)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                    >
-                      Delete
-                    </button>
-                  </td>
+        <>
+          <div className="space-y-3 sm:hidden">
+            {users.map((user) => (
+              <div
+                key={user.username}
+                className="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-800/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{user.username}</div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
+                    </div>
+                  </div>
+                  <RoleBadge role={user.role} />
+                </div>
+                <div className="mt-3 flex justify-end text-sm">
+                  <button
+                    onClick={() => handleEdit(user)}
+                    className="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(user.username)}
+                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-lg bg-gray-50 dark:bg-gray-800/50 sm:block">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Username
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="bg-white dark:bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
+                {users.map((user) => (
+                  <tr key={user.username}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {user.username}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <RoleBadge role={user.role} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                      <button
+                        onClick={() => handleEdit(user)}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-3"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.username)}
+                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No users found. Click &quot;Add User&quot; to create one.
         </div>
       )}
     </div>
+  );
+}
+
+function RoleBadge({ role }: { role: User['role'] }) {
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+        role === 'admin'
+          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+      }`}
+    >
+      {role}
+    </span>
   );
 }

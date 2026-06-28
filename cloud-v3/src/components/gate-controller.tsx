@@ -113,9 +113,41 @@ export function GateController() {
 
       {gateStatus.history && (
         <div>
-          <h3 className="text-lg font-medium mb-3">Recent Activity</h3>
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden">
-            <div className="max-h-[300px] overflow-y-auto">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-medium">Recent Activity</h3>
+            <select
+              value={timeFormat}
+              onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
+              className="rounded border border-gray-200 bg-transparent px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 sm:hidden"
+              title={`Select time format (Controller timezone: ${publicConfig.controllerTimezone})`}
+            >
+              <option value="relative">Relative</option>
+              <option value="controller">Controller</option>
+            </select>
+          </div>
+          <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <div className="space-y-3 p-4 sm:hidden">
+              {gateStatus.history.map((entry, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg bg-white p-3 text-sm dark:bg-gray-800"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <ActionBadge action={entry.action} />
+                    <TimeDisplay
+                      timestamp={entry.timestamp}
+                      format={timeFormat === 'relative' ? 'relative' : publicConfig.controllerTimezone}
+                      className="text-sm text-gray-600 dark:text-gray-400"
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {entry.actor}{entry.actor_name ? `: ${entry.actor_name}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden max-h-[300px] overflow-y-auto sm:block">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
                   <tr>
@@ -142,13 +174,7 @@ export function GateController() {
                   {gateStatus.history.map((entry, index) => (
                     <tr key={index} className="hover:bg-gray-100 dark:hover:bg-gray-800/50">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          entry.action === 'open'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                            : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        }`}>
-                          {entry.action}
-                        </span>
+                        <ActionBadge action={entry.action} />
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         <TimeDisplay
@@ -171,5 +197,19 @@ export function GateController() {
         </div>
       )}
     </div>
+  );
+}
+
+function ActionBadge({ action }: { action: 'open' | 'close' }) {
+  return (
+    <span
+      className={`px-2 py-1 text-xs font-medium rounded-full ${
+        action === 'open'
+          ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+          : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+      }`}
+    >
+      {action}
+    </span>
   );
 }

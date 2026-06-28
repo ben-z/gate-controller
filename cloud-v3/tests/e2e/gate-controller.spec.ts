@@ -31,6 +31,16 @@ async function browserJson(
   );
 }
 
+async function expectNoHorizontalOverflow(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    )
+    .toBe(true);
+}
+
 test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await expect((await request.get("/api/gate")).status()).toBe(401);
   await expect((await request.get("/api/schedules/upcoming")).status()).toBe(401);
@@ -72,6 +82,11 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await page.getByLabel("Action").selectOption("open");
   await page.getByRole("button", { name: "Create Schedule" }).click();
   await expect(page.getByRole("cell", { name: scheduleName })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("Action: open")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await expect
     .poll(async () => {
