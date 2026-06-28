@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
     const password = requireString(body, 'password');
     const role = requireRole(body.role);
 
+    if (getUsers().some((existing) => existing.username === username)) {
+      throw new ApiError(400, `User already exists: ${username}`);
+    }
+
     const newUser = createUser({
       username,
       password,
@@ -50,6 +54,10 @@ export async function PUT(request: NextRequest) {
     const username = requireString(body, 'username');
     const password = optionalString(body, 'password');
     const role = body.role === undefined ? undefined : requireRole(body.role);
+
+    if (!getUsers().some((existing) => existing.username === username)) {
+      throw new ApiError(400, `User not found: ${username}`);
+    }
 
     updateUser({
       username,

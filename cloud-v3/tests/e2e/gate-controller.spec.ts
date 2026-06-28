@@ -14,20 +14,24 @@ async function login(page: Page, username: string, password: string) {
 async function browserJson(
   page: Page,
   url: string,
-  options: { method?: string } = {}
+  options: { body?: unknown; method?: string } = {}
 ): Promise<{ status: number; body: unknown }> {
   return page.evaluate(
-    async ({ requestUrl, method }) => {
-      const response = await fetch(requestUrl, { method });
-      let body: unknown = null;
+    async ({ requestUrl, body, method }) => {
+      const response = await fetch(requestUrl, {
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: body === undefined ? undefined : { "content-type": "application/json" },
+        method,
+      });
+      let responseBody: unknown = null;
       try {
-        body = await response.json();
+        responseBody = await response.json();
       } catch {
         // 204 responses have no body.
       }
-      return { status: response.status, body };
+      return { status: response.status, body: responseBody };
     },
-    { requestUrl: url, method: options.method ?? "GET" }
+    { requestUrl: url, body: options.body, method: options.method ?? "GET" }
   );
 }
 
@@ -82,6 +86,24 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await page.getByLabel("Action").selectOption("open");
   await page.getByRole("button", { name: "Create Schedule" }).click();
   await expect(page.getByRole("cell", { name: scheduleName })).toBeVisible();
+  expect(
+    await browserJson(page, "/api/schedules", {
+      body: {
+        action: "open",
+        cron_expression: "0 8 * * 1-5",
+        enabled: true,
+        name: scheduleName,
+      },
+      method: "POST",
+    })
+  ).toEqual({
+    status: 400,
+    body: { error: `Schedule already exists: ${scheduleName}` },
+  });
+  expect(await browserJson(page, "/api/schedules?name=missing", { method: "DELETE" })).toEqual({
+    status: 400,
+    body: { error: "Schedule not found: missing" },
+  });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText("Action: open")).toBeVisible();
@@ -105,6 +127,24 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await page.getByLabel("Role").selectOption("user");
   await page.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByRole("cell", { name: username })).toBeVisible();
+  expect(
+    await browserJson(page, "/api/users", {
+      body: { password, role: "user", username },
+      method: "POST",
+    })
+  ).toEqual({
+    status: 400,
+    body: { error: `User already exists: ${username}` },
+  });
+  expect(
+    await browserJson(page, "/api/users", {
+      body: { role: "user", username: "missing" },
+      method: "PUT",
+    })
+  ).toEqual({
+    status: 400,
+    body: { error: "User not found: missing" },
+  });
 
   const userContext = await browser.newContext();
   const userPage = await userContext.newPage();

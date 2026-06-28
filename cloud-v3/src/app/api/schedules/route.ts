@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import {
   createSchedule,
   deleteSchedule,
+  getSchedule,
   getSchedules,
   updateSchedule as saveSchedule,
 } from '@/lib/db';
@@ -47,6 +48,10 @@ export async function POST(request: NextRequest) {
       throw new ApiError(400, 'Invalid cron expression');
     }
 
+    if (getSchedule(name)) {
+      throw new ApiError(400, `Schedule already exists: ${name}`);
+    }
+
     const newSchedule = createSchedule({
       name,
       cron_expression,
@@ -74,6 +79,9 @@ export async function PUT(request: NextRequest) {
 
     if (!name) {
       throw new ApiError(400, 'Missing schedule name');
+    }
+    if (!getSchedule(name)) {
+      throw new ApiError(400, `Schedule not found: ${name}`);
     }
 
     const body = requireObject(await readJsonBody(request));
@@ -110,6 +118,9 @@ export async function DELETE(request: NextRequest) {
 
     if (!name) {
       throw new ApiError(400, 'Missing schedule name');
+    }
+    if (!getSchedule(name)) {
+      throw new ApiError(400, `Schedule not found: ${name}`);
     }
 
     await stopSchedule(name);
