@@ -1,35 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const admin = { username: "admin", password: "password" };
-const agentToken = process.env.AGENT_TOKEN ?? "e2e-agent-token";
-
-async function login(page: Page, username: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-}
-
-async function browserJson(
-  page: Page,
-  url: string,
-  options: { method?: string } = {}
-): Promise<{ status: number; body: unknown }> {
-  return page.evaluate(
-    async ({ requestUrl, method }) => {
-      const response = await fetch(requestUrl, { method });
-      let body: unknown = null;
-      try {
-        body = await response.json();
-      } catch {
-        // 204 responses have no body.
-      }
-      return { status: response.status, body };
-    },
-    { requestUrl: url, method: options.method ?? "GET" }
-  );
-}
+import { expect, test } from "@playwright/test";
+import {
+  admin,
+  agentToken,
+  browserJson,
+  expectNoHorizontalOverflow,
+  login,
+} from "../helpers";
 
 test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await expect((await request.get("/api/gate")).status()).toBe(401);
@@ -48,6 +24,10 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await login(page, admin.username, admin.password);
 
   await expect(page.getByRole("heading", { name: "Gate Controller" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+  await page.getByText("Show").click();
+  await expect(page.getByText("Controller timezone")).toBeVisible();
+  await expect(page.getByText("Agent auth")).toBeVisible();
   await expect(page.getByText("CLOSED")).toBeVisible();
 
   await page.getByRole("button", { name: "Open Gate" }).click();
@@ -68,6 +48,11 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await page.getByLabel("Action").selectOption("open");
   await page.getByRole("button", { name: "Create Schedule" }).click();
   await expect(page.getByRole("cell", { name: scheduleName })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("Action: open")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await expect
     .poll(async () => {
@@ -91,6 +76,7 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   const userPage = await userContext.newPage();
   await login(userPage, username, password);
   await expect(userPage.getByRole("heading", { name: "User Management" })).toHaveCount(0);
+  await expect(userPage.getByRole("heading", { name: "Diagnostics" })).toHaveCount(0);
   await expect((await browserJson(userPage, "/api/users")).status).toBe(403);
   await userContext.close();
 

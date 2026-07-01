@@ -1,7 +1,9 @@
 services:
   agent:
-    container_name: gate_opener_agent
+    container_name: gate_controller_agent
     build: .
+    environment:
+      GATE_CONTROLLER_AGENT_TOKEN: ${GATE_CONTROLLER_AGENT_TOKEN:-}
     volumes:
       - ./:/workspace
       - /dev/mem:/dev/mem

@@ -227,72 +227,107 @@ export function ScheduleManager() {
         )}
 
         {schedules && schedules.length > 0 ? (
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-100 dark:bg-gray-800">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Schedule
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Cron Expression
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Action
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
-                {schedules.map((schedule) => (
-                  <tr key={schedule.name}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {schedule.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div>{schedule.cron_expression}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {getCronDescription(schedule.cron_expression)}
+          <>
+            <div className="space-y-3 sm:hidden">
+              {schedules.map((schedule) => (
+                <div
+                  key={schedule.name}
+                  className="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-800/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">{schedule.name}</div>
+                      <div className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400">
+                        {schedule.cron_expression}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {schedule.action}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          schedule.enabled
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-200'
-                        }`}
-                      >
-                        {schedule.enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    </div>
+                    <ScheduleStatus enabled={schedule.enabled} />
+                  </div>
+                  <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    {getCronDescription(schedule.cron_expression)}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Action: <span className="font-medium text-gray-900 dark:text-gray-100">{schedule.action}</span>
+                    </span>
+                    <div className="shrink-0 text-sm">
                       <button
                         onClick={() => handleEdit(schedule)}
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-3"
+                        className="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(schedule.name)}
-                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
-                    </td>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-lg bg-gray-50 dark:bg-gray-800/50 sm:block">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Schedule
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Cron Expression
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Action
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white dark:bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
+                  {schedules.map((schedule) => (
+                    <tr key={schedule.name}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {schedule.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div>{schedule.cron_expression}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {getCronDescription(schedule.cron_expression)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {schedule.action}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <ScheduleStatus enabled={schedule.enabled} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                        <button
+                          onClick={() => handleEdit(schedule)}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-3"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(schedule.name)}
+                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             No schedules found. Click &quot;Add Schedule&quot; to create one.
@@ -300,5 +335,19 @@ export function ScheduleManager() {
         )}
       </div>
     </div>
+  );
+}
+
+function ScheduleStatus({ enabled }: { enabled: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+        enabled
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+          : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-200'
+      }`}
+    >
+      {enabled ? 'Enabled' : 'Disabled'}
+    </span>
   );
 }

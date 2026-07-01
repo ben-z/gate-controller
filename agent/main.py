@@ -16,7 +16,7 @@ sentry_logging = LoggingIntegration(
     event_level=logging.ERROR  # Send errors as events
 )
 sentry_sdk.init(
-    # Obtained from https://unicorns-are-cool.sentry.io/settings/projects/gate-opener/keys/
+    # Gate controller agent Sentry project DSN.
     dsn="https://b3184994f9d267983dc3a5c99747b8b0@o4505847402135552.ingest.sentry.io/4505847409410048",
     integrations=[
         sentry_logging,
@@ -79,7 +79,7 @@ def loop_once():
         logging.info("Sleeping for 2 seconds and trying again")
         time.sleep(2)
 
-@monitor(monitor_slug='gate-opener-agent')
+@monitor(monitor_slug='gate-controller-agent')
 def ping_healthcheck():
     sleep(0.5) # space out the begin and end API calls
 
