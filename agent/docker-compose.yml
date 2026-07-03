@@ -4,6 +4,7 @@ services:
     build: .
     environment:
       GATE_CONTROLLER_AGENT_TOKEN: "${GATE_CONTROLLER_AGENT_TOKEN:?set GATE_CONTROLLER_AGENT_TOKEN}"
+      GATE_CONTROLLER_AGENT_DRY_RUN: ${GATE_CONTROLLER_AGENT_DRY_RUN:-}
     volumes:
       - ./:/workspace
       - /dev/mem:/dev/mem

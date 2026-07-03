@@ -10,6 +10,12 @@ Set `GATE_CONTROLLER_AGENT_TOKEN` to match the cloud app's `AGENT_TOKEN`.
 For Docker Compose, put it in `agent/.env` or export it in the shell before
 starting the service. Compose fails fast if the variable is missing.
 
+Set `GATE_CONTROLLER_AGENT_DRY_RUN=1` to poll the cloud service and log the
+relay actions without importing, initializing, writing, or cleaning up GPIO.
+This is useful for validating token and cloud connectivity without toggling the
+gate. Dry-run polls the cloud service normally, so the last-contact timestamp
+updates, but it does not initialize Sentry monitoring.
+
 Always-on service:
 ```bash
 docker compose up -d --build
