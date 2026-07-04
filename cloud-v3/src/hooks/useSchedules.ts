@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { Schedule, ScheduleInput } from '@/types/schedule';
+import { Schedule, ScheduleDraftResponse, ScheduleInput } from '@/types/schedule';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -32,6 +32,23 @@ export async function createSchedule(schedule: ScheduleInput) {
   if (!res.ok) {
     const errorData = await res.json();
     throw new Error(errorData.error || 'Failed to create schedule');
+  }
+
+  return res.json();
+}
+
+export async function draftSchedules(prompt: string): Promise<ScheduleDraftResponse> {
+  const res = await fetch('/api/schedules/draft', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.error || 'Failed to draft schedules');
   }
 
   return res.json();

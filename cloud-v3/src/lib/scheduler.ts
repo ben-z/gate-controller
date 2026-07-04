@@ -1,7 +1,7 @@
 import { config } from "@/config";
 import { Schedule } from "@/types/schedule";
 import { Queue, QueueEvents, Worker } from "bullmq";
-import cronstrue from "cronstrue";
+export { validateCronExpression } from "@/lib/cron";
 import { getSchedule, updateGateStatus } from "./db";
 
 const REDIS_CONNECTION_CONFIG = {
@@ -63,19 +63,6 @@ function getSchedulerRuntime(): SchedulerRuntime {
   }
 
   return globalForScheduler.gateSchedulerRuntime;
-}
-
-/**
- * Validates a cron expression
- */
-export function validateCronExpression(expression: string): boolean {
-  try {
-    cronstrue.toString(expression);
-    return true;
-  } catch (error) {
-    console.error("Invalid cron expression:", error);
-    return false;
-  }
 }
 
 /**

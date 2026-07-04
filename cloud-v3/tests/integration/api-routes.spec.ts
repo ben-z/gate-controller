@@ -18,6 +18,7 @@ test("api routes enforce auth and controlled edge errors", async ({
     { method: "GET", url: "/api/schedules" },
     { method: "GET", url: "/api/schedules/upcoming" },
     { method: "POST", url: "/api/schedules" },
+    { method: "POST", url: "/api/schedules/draft" },
     { method: "GET", url: "/api/users" },
   ]) {
     const response =
@@ -134,6 +135,17 @@ test("api routes enforce auth and controlled edge errors", async ({
     status: 400,
     body: { error: "Invalid action" },
   });
+  if (!process.env.E2E_OPENAI_API_KEY) {
+    expect(
+      await browserJson(page, "/api/schedules/draft", {
+        body: { prompt: "Open weekdays at 8 AM" },
+        method: "POST",
+      })
+    ).toEqual({
+      status: 503,
+      body: { error: "AI schedule drafting is not configured. Set OPENAI_API_KEY." },
+    });
+  }
 
   expect(
     await browserJson(page, "/api/users", {

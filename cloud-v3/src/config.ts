@@ -29,6 +29,7 @@ export const publicConfig = {
 export const config = {
   ...publicConfig,
   dbPath: process.env.DB_PATH || "data/gate.db",
+  scheduleDraftModel: process.env.OPENAI_SCHEDULE_MODEL || "gpt-5.5",
   redis: {
     host: process.env.REDIS_HOST || "localhost",
     port: parsePort(process.env.REDIS_PORT, 6379),
@@ -42,4 +43,5 @@ export const secrets = {
     { username: "admin", password: "replace_me" }
   ),
   agentToken: process.env.AGENT_TOKEN || "",
+  openaiApiKey: process.env.OPENAI_API_KEY || "",
 } as const;
