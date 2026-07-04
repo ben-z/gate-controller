@@ -3,7 +3,7 @@ services:
     container_name: gate_controller_agent
     build: .
     environment:
-      GATE_CONTROLLER_AGENT_TOKEN: ${GATE_CONTROLLER_AGENT_TOKEN:-}
+      GATE_CONTROLLER_AGENT_TOKEN: "${GATE_CONTROLLER_AGENT_TOKEN:?set GATE_CONTROLLER_AGENT_TOKEN}"
     volumes:
       - ./:/workspace
       - /dev/mem:/dev/mem
