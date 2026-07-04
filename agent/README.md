@@ -16,6 +16,10 @@ This is useful for validating token and cloud connectivity without toggling the
 gate. Dry-run polls the cloud service normally, so the last-contact timestamp
 updates, but it does not initialize Sentry monitoring.
 
+For one-shot smoke tests, set `GATE_CONTROLLER_AGENT_RUN_ONCE=1`. To point the
+agent at a non-production cloud instance, set `GATE_CONTROLLER_STATUS_URL` to
+that instance's `/api/gate/take_status` URL.
+
 Always-on service:
 ```bash
 docker compose up -d --build

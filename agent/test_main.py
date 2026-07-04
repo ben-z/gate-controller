@@ -106,12 +106,34 @@ class TakeCommandTests(unittest.TestCase):
                 self.assertEqual(agent_main.take_command("pi-host"), "open")
 
         post.assert_called_once_with(
-            agent_main.GATE_STATUS_URL,
+            agent_main.DEFAULT_GATE_STATUS_URL,
             json={"host": "pi-host"},
             headers={"Authorization": "Bearer secret"},
             timeout=5,
         )
         response.raise_for_status.assert_called_once_with()
+
+    def test_take_command_uses_status_url_override(self):
+        status_url = "http://127.0.0.1:3100/api/gate/take_status"
+
+        with mock.patch.dict(
+            agent_main.os.environ,
+            {agent_main.STATUS_URL_ENV: status_url},
+            clear=True,
+        ):
+            with mock.patch.object(
+                agent_main.requests,
+                "post",
+                return_value=fake_response({"status": "closed"}),
+            ) as post:
+                self.assertEqual(agent_main.take_command("pi-host"), "closed")
+
+        post.assert_called_once_with(
+            status_url,
+            json={"host": "pi-host"},
+            headers={},
+            timeout=5,
+        )
 
     def test_take_command_rejects_missing_status(self):
         with mock.patch.object(
