@@ -5,8 +5,10 @@ import logging
 import os
 
 DRY_RUN_ENV = "GATE_CONTROLLER_AGENT_DRY_RUN"
+RUN_ONCE_ENV = "GATE_CONTROLLER_AGENT_RUN_ONCE"
 AGENT_TOKEN_ENV = "GATE_CONTROLLER_AGENT_TOKEN"
-GATE_STATUS_URL = "https://gate-controller-cloud-v3.benzhang.dev/api/gate/take_status"
+STATUS_URL_ENV = "GATE_CONTROLLER_STATUS_URL"
+DEFAULT_GATE_STATUS_URL = "https://gate-controller-cloud-v3.benzhang.dev/api/gate/take_status"
 MONITOR_SLUG = "gate-controller-agent"
 RELAY_PIN = 4
 TRUE_VALUES = {"1", "true", "t", "yes", "y", "on"}
@@ -45,6 +47,10 @@ def init_sentry():
         ],
         traces_sample_rate=1.0,
     )
+
+
+def gate_status_url():
+    return os.environ.get(STATUS_URL_ENV) or DEFAULT_GATE_STATUS_URL
 
 
 class RelayController:
@@ -112,7 +118,7 @@ def take_command(hostname):
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    response = requests.post(GATE_STATUS_URL, json=data, headers=headers, timeout=5)
+    response = requests.post(gate_status_url(), json=data, headers=headers, timeout=5)
     response.raise_for_status()
 
     command = response.json().get('status')
@@ -136,9 +142,13 @@ def apply_command(command, relay):
         raise ValueError(f"Unknown command: {command}")
 
 
+def poll_once(relay, hostname):
+    apply_command(take_command(hostname), relay)
+
+
 def loop_once(relay, hostname):
     try:
-        apply_command(take_command(hostname), relay)
+        poll_once(relay, hostname)
     except Exception as e:
         logging.error(f"Unexpected {e=}, {type(e)=}")
         logging.info("Sleeping for 2 seconds and trying again")
@@ -167,6 +177,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     dry_run = env_flag(DRY_RUN_ENV)
+    run_once = env_flag(RUN_ONCE_ENV)
     if not dry_run:
         init_sentry()
     monitored_healthcheck = build_healthcheck(dry_run)
@@ -176,6 +187,10 @@ def main():
 
     try:
         relay.setup()
+        if run_once:
+            poll_once(relay, hostname)
+            return
+
         last_healthcheck_time = 0
         while True:
             loop_once(relay, hostname)
