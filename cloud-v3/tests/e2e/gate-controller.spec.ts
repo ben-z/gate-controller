@@ -118,6 +118,7 @@ test("AI schedule drafting works end-to-end", async ({ page }) => {
     .fill("Open the gate every weekday at 7:30 AM.");
   await page.getByRole("button", { name: "Draft" }).click();
 
+  await expect(page.getByText("No gate command is being sent.")).toBeVisible();
   await expect(page.getByText("Review Drafts")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "Apply All" })).toBeVisible();
   await page.getByRole("button", { name: "Apply All" }).click();

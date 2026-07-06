@@ -13,6 +13,7 @@ import cronstrue from 'cronstrue';
 import {
   Schedule,
   ScheduleDraft,
+  ScheduleDraftProgress,
   ScheduleDraftResponse,
   ScheduleInput,
 } from '@/types/schedule';
@@ -39,6 +40,7 @@ export function ScheduleManager() {
   const [cronError, setCronError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [draftResult, setDraftResult] = useState<ScheduleDraftResponse | null>(null);
+  const [draftProgress, setDraftProgress] = useState<ScheduleDraftProgress | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
   const [applyingDraft, setApplyingDraft] = useState<string | null>(null);
 
@@ -64,12 +66,18 @@ export function ScheduleManager() {
     try {
       setError(null);
       setIsDrafting(true);
-      setDraftResult(await draftSchedules(trimmedPrompt));
+      setDraftResult(null);
+      setDraftProgress({
+        title: 'Starting draft',
+        detail: 'Preparing the schedule request.',
+      });
+      setDraftResult(await draftSchedules(trimmedPrompt, setDraftProgress));
     } catch (error) {
       console.error('Failed to draft schedules:', error);
       setError(error instanceof Error ? error.message : 'Failed to draft schedules');
     } finally {
       setIsDrafting(false);
+      setDraftProgress(null);
     }
   };
 
@@ -261,6 +269,7 @@ export function ScheduleManager() {
             </button>
           ))}
         </div>
+        {draftProgress && <DraftingNotice progress={draftProgress} />}
       </form>
 
       {draftResult && (
@@ -298,6 +307,28 @@ export function ScheduleManager() {
           No schedules found.
         </div>
       )}
+    </div>
+  );
+}
+
+function DraftingNotice({ progress }: { progress: ScheduleDraftProgress }) {
+  return (
+    <div
+      className="rounded-lg border border-blue-200 bg-white p-3 text-sm dark:border-blue-900 dark:bg-gray-900"
+      aria-live="polite"
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-blue-600" />
+        <div className="min-w-0">
+          <div className="font-medium text-gray-900 dark:text-gray-100">
+            {progress.title}
+          </div>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">{progress.detail}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            No gate command is being sent.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

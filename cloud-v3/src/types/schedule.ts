@@ -19,6 +19,16 @@ export type ScheduleDraftResponse = {
   warnings: string[];
 };
 
+export type ScheduleDraftProgress = {
+  title: string;
+  detail: string;
+};
+
+export type ScheduleDraftStreamEvent =
+  | ({ type: 'progress' } & ScheduleDraftProgress)
+  | { type: 'result'; result: ScheduleDraftResponse }
+  | { type: 'error'; error: string };
+
 export type ScheduleInput = Pick<
   Schedule,
   'name' | 'cron_expression' | 'action' | 'enabled'

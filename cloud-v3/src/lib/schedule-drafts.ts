@@ -5,7 +5,11 @@ import {
   validateCronExpression,
 } from "@/lib/cron";
 import { ApiError } from "@/lib/api";
-import { Schedule, ScheduleDraftResponse } from "@/types/schedule";
+import {
+  Schedule,
+  ScheduleDraftProgress,
+  ScheduleDraftResponse,
+} from "@/types/schedule";
 
 type ModelScheduleDraftResponse = {
   interpretation: string;
@@ -64,19 +68,18 @@ Rules:
 
 export async function draftSchedules(
   prompt: string,
-  existingSchedules: Schedule[]
+  existingSchedules: Schedule[],
+  onProgress?: (progress: ScheduleDraftProgress) => void
 ): Promise<ScheduleDraftResponse> {
-  if (!secrets.openaiApiKey) {
-    throw new ApiError(503, "AI schedule drafting is not configured. Set OPENAI_API_KEY.");
-  }
+  requireScheduleDraftingConfigured();
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${secrets.openaiApiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
+  onProgress?.({
+    title: "Thinking through the schedule",
+    detail: "Asking AI for recurring open/close drafts in controller time.",
+  });
+
+  const response = await fetchOpenAiDraft(
+    JSON.stringify({
       model: config.scheduleDraftModel,
       store: false,
       input: [
@@ -99,14 +102,52 @@ export async function draftSchedules(
         },
       },
     }),
-  });
+    onProgress
+  );
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(response.status, openAiErrorMessage(response.status, body));
   }
 
+  onProgress?.({
+    title: "Validating drafts",
+    detail: "Checking cron expressions and previewing upcoming run times.",
+  });
+
   return normalizeDraftResponse(parseModelResponse(body), existingSchedules);
+}
+
+export function requireScheduleDraftingConfigured() {
+  if (!secrets.openaiApiKey) {
+    throw new ApiError(503, "AI schedule drafting is not configured. Set OPENAI_API_KEY.");
+  }
+}
+
+async function fetchOpenAiDraft(
+  body: string,
+  onProgress?: (progress: ScheduleDraftProgress) => void
+) {
+  try {
+    return await postOpenAiDraft(body);
+  } catch {
+    onProgress?.({
+      title: "Retrying AI request",
+      detail: "The connection dropped before OpenAI replied; trying once more.",
+    });
+    return postOpenAiDraft(body);
+  }
+}
+
+function postOpenAiDraft(body: string) {
+  return fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secrets.openaiApiKey}`,
+      "content-type": "application/json",
+    },
+    body,
+  });
 }
 
 function parseModelResponse(body: unknown): ModelScheduleDraftResponse {
