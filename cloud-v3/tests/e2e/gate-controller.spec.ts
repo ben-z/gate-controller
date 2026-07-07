@@ -31,7 +31,7 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
   await expect(page.getByText("CLOSED")).toBeVisible();
 
   await page.getByRole("button", { name: "Open Gate" }).click();
-  await expect(page.getByText("OPEN")).toBeVisible();
+  await expect(page.getByText("OPEN", { exact: true })).toBeVisible();
 
   const openedAgentStatus = await request.post("/api/gate/take_status", {
     headers: { Authorization: `Bearer ${agentToken}` },
@@ -98,4 +98,63 @@ test("gate controller works end-to-end", async ({ browser, page, request }) => {
     .getByRole("button", { name: "Delete" })
     .click();
   await expect(page.getByRole("cell", { name: scheduleName })).toHaveCount(0);
+});
+
+test("AI schedule drafting works end-to-end", async ({ page }) => {
+  if (!process.env.E2E_OPENAI_API_KEY) {
+    throw new Error("E2E_OPENAI_API_KEY is required for AI schedule drafting E2E");
+  }
+
+  await login(page, admin.username, admin.password);
+
+  const before = await browserJson(page, "/api/schedules");
+  expect(before.status).toBe(200);
+  const existingNames = new Set(
+    (before.body as Array<{ name: string }>).map((schedule) => schedule.name)
+  );
+
+  await page
+    .getByLabel("Describe schedule")
+    .fill("Open the gate every weekday at 7:30 AM.");
+  await page.getByRole("button", { name: "Draft" }).click();
+
+  await expect(page.getByText("No gate command is being sent.")).toBeVisible();
+  await expect(page.getByText("Review Drafts")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Apply All" })).toBeVisible();
+  await page.getByRole("button", { name: "Apply All" }).click();
+
+  let createdSchedules: Array<{
+    action: "open" | "close";
+    cron_expression: string;
+    enabled: boolean;
+    name: string;
+  }> = [];
+
+  await expect
+    .poll(async () => {
+      const response = await browserJson(page, "/api/schedules");
+      expect(response.status).toBe(200);
+      createdSchedules = (
+        response.body as Array<{
+          action: "open" | "close";
+          cron_expression: string;
+          enabled: boolean;
+          name: string;
+        }>
+      ).filter((schedule) => !existingNames.has(schedule.name));
+      return createdSchedules.length;
+    })
+    .toBeGreaterThan(0);
+
+  for (const schedule of createdSchedules) {
+    expect(schedule.action).toBe("open");
+    expect(schedule.cron_expression.trim().split(/\s+/)).toHaveLength(5);
+    expect(schedule.enabled).toBe(true);
+    await expect(page.getByRole("cell", { name: schedule.name })).toBeVisible();
+    expect(
+      await browserJson(page, `/api/schedules?name=${encodeURIComponent(schedule.name)}`, {
+        method: "DELETE",
+      })
+    ).toEqual({ status: 204, body: null });
+  }
 });
