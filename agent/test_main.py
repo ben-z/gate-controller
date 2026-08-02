@@ -180,5 +180,26 @@ class HealthcheckTests(unittest.TestCase):
         crons.monitor.assert_called_once_with(monitor_slug=agent_main.MONITOR_SLUG)
 
 
+class MainModeTests(unittest.TestCase):
+    def test_run_once_requires_dry_run_before_initializing_hardware(self):
+        with mock.patch.dict(
+            agent_main.os.environ,
+            {
+                agent_main.RUN_ONCE_ENV: "1",
+                agent_main.DRY_RUN_ENV: "0",
+            },
+            clear=True,
+        ):
+            with mock.patch.object(agent_main, "init_sentry") as init_sentry:
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "GATE_CONTROLLER_AGENT_RUN_ONCE=1 requires "
+                    "GATE_CONTROLLER_AGENT_DRY_RUN=1",
+                ):
+                    agent_main.main()
+
+        init_sentry.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

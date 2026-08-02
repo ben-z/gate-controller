@@ -178,6 +178,9 @@ def main():
 
     dry_run = env_flag(DRY_RUN_ENV)
     run_once = env_flag(RUN_ONCE_ENV)
+    if run_once and not dry_run:
+        raise ValueError(f"{RUN_ONCE_ENV}=1 requires {DRY_RUN_ENV}=1")
+
     if not dry_run:
         init_sentry()
     monitored_healthcheck = build_healthcheck(dry_run)
