@@ -25,8 +25,8 @@ Bootstrap creates two secretless federated identities:
 
 It copies the existing encrypted secret backups into the dedicated vault and
 sets non-secret variables on the GitHub `production` environment. That
-environment accepts deployments only from `master`. Existing secrets in the
-shared vault are retained for rollback.
+environment accepts deployments from `master` and operator-created `rollback/*`
+branches. Existing secrets in the shared vault are retained for rollback.
 
 ## Continuous deployment
 
@@ -50,16 +50,20 @@ gh run list \
   --json databaseId,headSha,createdAt
 ```
 
-Dispatch the rollback from `master`:
+Create a temporary rollback branch at that commit:
 
 ```sh
-gh workflow run "Publish and deploy Cloud V3" \
-  --repo ben-z/gate-controller \
-  --ref master \
-  -f rollback_sha=<full-40-character-sha>
+git push origin <full-40-character-sha>:refs/heads/rollback/<name>
 ```
 
-The workflow rejects non-`master` dispatches, SHAs outside `master` history, and
-commits without a previous successful `production` deployment. A rollback
-rebuilds that exact commit, publishes its immutable multi-architecture digest,
-and runs the same deployment and verification steps as a normal release.
+In GitHub Actions, open **Publish and deploy Cloud V3**, choose **Run workflow**,
+select that branch under **Use workflow from**, and run it. The selected commit's
+workflow builds and deploys the code and deployment strategy bundled together at
+that commit. The production environment rejects branches outside `master` and
+`rollback/*`.
+
+After the rollback succeeds, delete the temporary branch:
+
+```sh
+git push origin --delete rollback/<name>
+```

@@ -160,25 +160,32 @@ gh api \
 }
 JSON
 
-task_branch_policy_count="$(gh api \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2026-03-10" \
-  "repos/$GITHUB_REPOSITORY/environments/$GITHUB_ENVIRONMENT/deployment-branch-policies" \
-  --jq '[.branch_policies[] | select(.name == "master" and .type == "branch")] | length')"
-
-if [[ "$task_branch_policy_count" == "0" ]]; then
-  gh api \
-    --method POST \
+ensure_deployment_branch_policy() {
+  local task_pattern="$1"
+  local task_branch_policy_count
+  task_branch_policy_count="$(gh api \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2026-03-10" \
     "repos/$GITHUB_REPOSITORY/environments/$GITHUB_ENVIRONMENT/deployment-branch-policies" \
-    -f name=master \
-    -f type=branch \
-    --silent
-elif [[ "$task_branch_policy_count" != "1" ]]; then
-  echo "Expected exactly one production deployment policy for master." >&2
-  exit 1
-fi
+    --jq "[.branch_policies[] | select(.name == \"$task_pattern\" and .type == \"branch\")] | length")"
+
+  if [[ "$task_branch_policy_count" == "0" ]]; then
+    gh api \
+      --method POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2026-03-10" \
+      "repos/$GITHUB_REPOSITORY/environments/$GITHUB_ENVIRONMENT/deployment-branch-policies" \
+      -f name="$task_pattern" \
+      -f type=branch \
+      --silent
+  elif [[ "$task_branch_policy_count" != "1" ]]; then
+    echo "Expected exactly one production deployment policy for $task_pattern." >&2
+    exit 1
+  fi
+}
+
+ensure_deployment_branch_policy master
+ensure_deployment_branch_policy 'rollback/*'
 
 set_environment_variable() {
   local task_name="$1"
