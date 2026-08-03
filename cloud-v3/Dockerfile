@@ -62,9 +62,9 @@ COPY --from=build /app /app
 RUN mkdir -p /data/redis && chown -R node:node /data
 VOLUME /data
 
-# Set up redis
-ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
-COPY redis.conf ${REDIS_CONFIG_FILE}
+# Keep the app-specific Redis config somewhere the non-root app user can read.
+ENV REDIS_CONFIG_FILE='/app/redis.conf'
+COPY --chmod=0444 redis.conf ${REDIS_CONFIG_FILE}
 
 ARG SOURCE_SHA
 RUN test "${#SOURCE_SHA}" -eq 40 && ! printf '%s' "$SOURCE_SHA" | grep -q '[^0-9a-f]'
@@ -82,5 +82,8 @@ ENV REDIS_PORT='6379'
 # Also set INITIAL_ADMIN_CREDENTIALS at runtime. In fly.io, this can be done via `fly secrets set INITIAL_ADMIN_CREDENTIALS=...`
 
 USER node
+
+# Fail the image build if production prerequisites are inaccessible to the runtime user.
+RUN test -r "${REDIS_CONFIG_FILE}" && test -w /data/redis
 
 CMD [ "run", "prod:all" ]
