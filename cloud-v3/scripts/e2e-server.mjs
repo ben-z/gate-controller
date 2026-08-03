@@ -10,6 +10,7 @@ const adminCredentials =
   process.env.INITIAL_ADMIN_CREDENTIALS ??
   JSON.stringify({ username: "admin", password: "password" });
 const agentToken = process.env.AGENT_TOKEN ?? "e2e-agent-token";
+const appVersion = process.env.APP_VERSION ?? "0000000000000000000000000000000000000000";
 
 mkdirSync(path.dirname(dbPath), { recursive: true });
 for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
@@ -29,6 +30,7 @@ const childEnv = {
   DB_PATH: dbPath,
   INITIAL_ADMIN_CREDENTIALS: adminCredentials,
   AGENT_TOKEN: agentToken,
+  APP_VERSION: appVersion,
 };
 
 const children = new Set();

@@ -6,6 +6,12 @@ test("api routes enforce auth and controlled edge errors", async ({
   page,
   request,
 }) => {
+  const versionResponse = await request.get("/api/version");
+  await expect(versionResponse).toBeOK();
+  expect(await versionResponse.json()).toEqual({
+    version: process.env.APP_VERSION,
+  });
+
   const suffix = Date.now().toString(36);
   const scheduleName = `api schedule ${suffix}`;
   const username = `api-user-${suffix}`;
