@@ -109,15 +109,13 @@ spec:
               cpu: 500m
               memory: 768Mi
           readinessProbe:
-            httpGet:
-              path: /api/version
-              port: http
+            tcpSocket:
+              port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/version
-              port: http
+            tcpSocket:
+              port: 3000
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:
