@@ -34,6 +34,10 @@ RUN REDISMS_DISABLE_POSTINSTALL=1 npm ci --include=dev
 # Copy application code
 COPY . .
 
+ARG SOURCE_SHA
+RUN test "${#SOURCE_SHA}" -eq 40 && ! printf '%s' "$SOURCE_SHA" | grep -q '[^0-9a-f]'
+ENV APP_VERSION=${SOURCE_SHA}
+
 # Build application
 RUN npx next build --experimental-build-mode compile
 
@@ -54,13 +58,17 @@ RUN apt-get update && apt-get install -y redis-server
 # Copy built application
 COPY --from=build /app /app
 
-# Set up sqlite3 on a separate volume
-RUN mkdir -p /data
+# Set up application state on a separate volume
+RUN mkdir -p /data/redis && chown -R node:node /data
 VOLUME /data
 
 # Set up redis
 ENV REDIS_CONFIG_FILE='/etc/redis/redis.conf'
 COPY redis.conf ${REDIS_CONFIG_FILE}
+
+ARG SOURCE_SHA
+RUN test "${#SOURCE_SHA}" -eq 40 && ! printf '%s' "$SOURCE_SHA" | grep -q '[^0-9a-f]'
+ENV APP_VERSION=${SOURCE_SHA}
 
 # Entrypoint sets up the container.
 ENTRYPOINT [ "/usr/local/bin/npm" ]
@@ -72,5 +80,7 @@ ENV DB_PATH='/data/sqlite.db'
 ENV REDIS_HOST='localhost'
 ENV REDIS_PORT='6379'
 # Also set INITIAL_ADMIN_CREDENTIALS at runtime. In fly.io, this can be done via `fly secrets set INITIAL_ADMIN_CREDENTIALS=...`
+
+USER node
 
 CMD [ "run", "prod:all" ]

@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+process.env.APP_VERSION ??= "0000000000000000000000000000000000000000";
+
 const port = Number(process.env.PORT ?? 3100);
 
 export default defineConfig({

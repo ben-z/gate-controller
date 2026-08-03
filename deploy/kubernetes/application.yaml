@@ -66,6 +66,14 @@ spec:
         azure.workload.identity/use: "true"
     spec:
       serviceAccountName: gate-controller-cloud-v3
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
       tolerations:
         - key: kubernetes.azure.com/scalesetpriority
           operator: Equal
@@ -75,6 +83,11 @@ spec:
         - name: gate-controller-cloud-v3
           image: __IMAGE__
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -96,13 +109,15 @@ spec:
               cpu: 500m
               memory: 768Mi
           readinessProbe:
-            tcpSocket:
-              port: 3000
+            httpGet:
+              path: /api/version
+              port: http
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
-              port: 3000
+            httpGet:
+              path: /api/version
+              port: http
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:

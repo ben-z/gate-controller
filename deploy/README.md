@@ -33,7 +33,8 @@ branches. Existing secrets in the shared vault are retained for rollback.
 `Cloud V3 Checks` runs on every pull request and default-branch push. A
 successful `master` push triggers the image workflow, which builds the two
 architectures, publishes the immutable manifest, deploys it, waits for the
-rollout, confirms the exact live image, and probes the login page.
+rollout, confirms the exact live image, and requires `/api/version` to report
+the deployed commit SHA.
 
 ## Manual rollback
 

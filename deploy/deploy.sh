@@ -16,8 +16,16 @@ require_variable() {
   fi
 }
 
+for task_command in curl jq kubectl sed; do
+  if ! command -v "$task_command" >/dev/null 2>&1; then
+    echo "Missing required command: $task_command" >&2
+    exit 1
+  fi
+done
+
 for task_variable in \
   IMAGE \
+  SOURCE_SHA \
   AZURE_TENANT_ID \
   GATE_CONTROLLER_KEY_VAULT_NAME \
   GATE_CONTROLLER_SECRET_IDENTITY_CLIENT_ID \
@@ -27,6 +35,11 @@ done
 
 if [[ ! "$IMAGE" =~ ^ghcr\.io/ben-z/gate-controller/cloud-v3@sha256:[0-9a-f]{64}$ ]]; then
   echo "IMAGE must be an immutable gate-controller digest." >&2
+  exit 1
+fi
+
+if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "SOURCE_SHA must be a full lowercase Git commit SHA." >&2
   exit 1
 fi
 
@@ -96,15 +109,28 @@ if [[ "$task_live_image" != "$IMAGE" ]]; then
   exit 1
 fi
 
-curl \
-  --fail \
-  --location \
-  --max-time 30 \
-  --retry 5 \
-  --retry-all-errors \
-  --retry-delay 5 \
-  --silent \
-  --show-error \
-  "$GATE_CONTROLLER_URL/login" >/dev/null
+task_live_version=""
+for task_attempt in {1..12}; do
+  if task_version_response="$(curl \
+    --fail \
+    --location \
+    --max-time 10 \
+    --silent \
+    "$GATE_CONTROLLER_URL/api/version" 2>/dev/null)"; then
+    task_live_version="$(jq -er '.version | select(type == "string")' \
+      <<<"$task_version_response" 2>/dev/null || true)"
+    if [[ "$task_live_version" == "$SOURCE_SHA" ]]; then
+      break
+    fi
+  fi
 
-echo "Deployed and verified $IMAGE"
+  echo "Waiting for application version $SOURCE_SHA (attempt $task_attempt/12, got ${task_live_version:-no valid response})."
+  sleep 5
+done
+
+if [[ "$task_live_version" != "$SOURCE_SHA" ]]; then
+  echo "Live application version mismatch: expected $SOURCE_SHA, got ${task_live_version:-no valid response}." >&2
+  exit 1
+fi
+
+echo "Deployed and verified $IMAGE at application version $SOURCE_SHA"
