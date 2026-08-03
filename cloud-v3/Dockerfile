@@ -29,7 +29,7 @@ RUN apt-get update -qq && \
 
 # Install node modules
 COPY package-lock.json package.json ./
-RUN npm ci --include=dev
+RUN REDISMS_DISABLE_POSTINSTALL=1 npm ci --include=dev
 
 # Copy application code
 COPY . .
