@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gate-controller-cloud-v3
+  namespace: gate-controller-cloud-v3
+  annotations:
+    azure.workload.identity/client-id: __SECRET_IDENTITY_CLIENT_ID__
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: gate-controller-cloud-v3
+  namespace: gate-controller-cloud-v3
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "false"
+    clientID: __SECRET_IDENTITY_CLIENT_ID__
+    keyvaultName: __KEY_VAULT_NAME__
+    tenantId: __AZURE_TENANT_ID__
+    objects: |
+      array:
+        - |
+          objectName: gate-controller-cloud-v3-initial-admin-credentials
+          objectType: secret
+          objectAlias: initial-admin-credentials
+        - |
+          objectName: gate-controller-cloud-v3-agent-token
+          objectType: secret
+          objectAlias: agent-token
+        - |
+          objectName: gate-controller-cloud-v3-openai-api-key
+          objectType: secret
+          objectAlias: openai-api-key
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gate-controller-cloud-v3-data
+  namespace: gate-controller-cloud-v3
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gate-controller-cloud-v3
+  namespace: gate-controller-cloud-v3
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gate-controller-cloud-v3
+  template:
+    metadata:
+      labels:
+        app: gate-controller-cloud-v3
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: gate-controller-cloud-v3
+      tolerations:
+        - key: kubernetes.azure.com/scalesetpriority
+          operator: Equal
+          value: spot
+          effect: NoSchedule
+      containers:
+        - name: gate-controller-cloud-v3
+          image: __IMAGE__
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              export INITIAL_ADMIN_CREDENTIALS="$(cat /mnt/secrets-store/initial-admin-credentials)"
+              if [ -f /mnt/secrets-store/agent-token ]; then
+                export AGENT_TOKEN="$(cat /mnt/secrets-store/agent-token)"
+              fi
+              export OPENAI_API_KEY="$(cat /mnt/secrets-store/openai-api-key)"
+              exec npm run prod:all
+          ports:
+            - name: http
+              containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          readinessProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gate-controller-cloud-v3-data
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: gate-controller-cloud-v3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gate-controller-cloud-v3
+  namespace: gate-controller-cloud-v3
+spec:
+  selector:
+    app: gate-controller-cloud-v3
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gate-controller-cloud-v3
+  namespace: gate-controller-cloud-v3
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: gate-controller-cloud-v3.benzhang.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gate-controller-cloud-v3
+                port:
+                  number: 80
