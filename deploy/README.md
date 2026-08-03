@@ -34,3 +34,32 @@ shared vault are retained for rollback.
 successful `master` push triggers the image workflow, which builds the two
 architectures, publishes the immutable manifest, deploys it, waits for the
 rollout, confirms the exact live image, and probes the login page.
+
+## Manual rollback
+
+List successful automatic production deployments and select the full commit SHA
+to restore:
+
+```sh
+gh run list \
+  --repo ben-z/gate-controller \
+  --workflow "Publish and deploy Cloud V3" \
+  --event workflow_run \
+  --status success \
+  --limit 10 \
+  --json databaseId,headSha,createdAt
+```
+
+Dispatch the rollback from `master`:
+
+```sh
+gh workflow run "Publish and deploy Cloud V3" \
+  --repo ben-z/gate-controller \
+  --ref master \
+  -f rollback_sha=<full-40-character-sha>
+```
+
+The workflow rejects non-`master` dispatches, SHAs outside `master` history, and
+commits without a previous successful `production` deployment. A rollback
+rebuilds that exact commit, publishes its immutable multi-architecture digest,
+and runs the same deployment and verification steps as a normal release.
