@@ -13,6 +13,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      REDISMS_DISABLE_POSTINSTALL: "1"
+      REDISMS_SYSTEM_BINARY: /usr/bin/redis-server
     defaults:
       run:
         working-directory: ./cloud-v3
@@ -23,6 +26,7 @@ jobs:
           node-version: 22.11.0
           cache: npm
           cache-dependency-path: cloud-v3/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y redis-server
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
