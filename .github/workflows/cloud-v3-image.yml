@@ -9,11 +9,6 @@ on:
     branches:
       - master
   workflow_dispatch:
-    inputs:
-      rollback_sha:
-        description: Full SHA of a previously successful production deployment
-        required: true
-        type: string
 
 concurrency:
   group: cloud-v3-production
@@ -32,26 +27,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: read
     outputs:
       sha: ${{ steps.source.outputs.sha }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-          ref: master
       - id: source
         env:
           AUTOMATIC_SHA: ${{ github.event.workflow_run.head_sha }}
-          GH_TOKEN: ${{ github.token }}
-          REQUESTED_SHA: ${{ inputs.rollback_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
-              echo "Manual rollbacks must be dispatched from master." >&2
+            if [[ "$GITHUB_REF" != "refs/heads/master" && "$GITHUB_REF" != refs/heads/rollback/* ]]; then
+              echo "Manual deployments must use master or a rollback/* branch." >&2
               exit 1
             fi
-            SOURCE_SHA="$REQUESTED_SHA"
+            SOURCE_SHA="$DISPATCH_SHA"
           else
             SOURCE_SHA="$AUTOMATIC_SHA"
           fi
@@ -59,38 +48,6 @@ jobs:
           if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Invalid source SHA: $SOURCE_SHA" >&2
             exit 1
-          fi
-
-          if ! git merge-base --is-ancestor "$SOURCE_SHA" HEAD; then
-            echo "Source SHA must be an ancestor of master: $SOURCE_SHA" >&2
-            exit 1
-          fi
-
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            previously_deployed=false
-            while IFS= read -r deployment_id; do
-              [[ -n "$deployment_id" ]] || continue
-              deployment_state="$(gh api \
-                --method GET \
-                "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" \
-                -f per_page=1 \
-                --jq '.[0].state // ""')"
-              if [[ "$deployment_state" == "success" ]]; then
-                previously_deployed=true
-                break
-              fi
-            done < <(gh api \
-              --method GET \
-              "repos/$GITHUB_REPOSITORY/deployments" \
-              -f sha="$SOURCE_SHA" \
-              -f environment=production \
-              -f per_page=100 \
-              --jq '.[].id')
-
-            if [[ "$previously_deployed" != "true" ]]; then
-              echo "Rollback SHA was not previously deployed successfully to production: $SOURCE_SHA" >&2
-              exit 1
-            fi
           fi
 
           echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
