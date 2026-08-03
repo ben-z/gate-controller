@@ -17,7 +17,6 @@ A Next.js-based web application for controlling and monitoring gates.
 - Node.js 22.11.0 or later
 - npm or yarn package manager
 - Docker (for containerized deployment)
-- Fly.io CLI (for deployment)
 
 ## Getting Started
 
@@ -66,11 +65,10 @@ PLAYWRIGHT_BROWSER_CHANNEL=chrome npm run e2e
 
 ## Deployment
 
-The application is configured for deployment on Fly.io using Docker. The deployment process is handled through the `fly.toml` configuration file.
-
-   ```bash
-   fly deploy
-   ```
+Successful checks on a `master` push publish an immutable multi-architecture
+container image and deploy it to the production AKS cluster. Kubernetes
+manifests, the one-time Azure/GitHub bootstrap, and operational details live in
+[`../deploy/README.md`](../deploy/README.md).
 
 ## Project Structure
 
