@@ -154,7 +154,7 @@ metadata:
   name: gate-controller-cloud-v3
   namespace: gate-controller-cloud-v3
 spec:
-  ingressClassName: nginx
+  ingressClassName: public
   rules:
     - host: gate-controller-cloud-v3.benzhang.dev
       http:
