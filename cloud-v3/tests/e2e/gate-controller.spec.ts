@@ -25,6 +25,31 @@ function savedSchedule(page: Page, name: string) {
     .filter({ has: page.getByRole('heading', { name, exact: true }) });
 }
 
+function diagnosticValue(page: Page, label: string) {
+  return page.getByText(label, { exact: true }).locator('..').locator('dd');
+}
+
+async function expectNoPrivateDiagnostics(page: Page, privateValues: string[]) {
+  for (const label of [
+    'Server configuration',
+    'Database path',
+    'Redis',
+    'Agent auth',
+    'Node environment',
+    'Build information',
+  ]) {
+    await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+  }
+  const html = await page.content();
+  for (const value of privateValues) {
+    expect(value).not.toBe('');
+    expect(
+      html.includes(value),
+      'Member HTML exposes private server configuration',
+    ).toBe(false);
+  }
+}
+
 test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await expect((await request.get('/api/gate')).status()).toBe(401);
   await expect((await request.get('/api/schedules/upcoming')).status()).toBe(
@@ -54,6 +79,14 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   ).toBeVisible();
   await expect(page.getByText('Controller timezone')).toBeVisible();
   await expect(page.getByText('Agent auth')).toBeVisible();
+  const controllerTimezone = await diagnosticValue(
+    page,
+    'Controller timezone',
+  ).innerText();
+  const privateDiagnostics = [
+    await diagnosticValue(page, 'Database path').innerText(),
+    await diagnosticValue(page, 'Redis').innerText(),
+  ];
   await openView(page, 'Overview');
   await expect(page.locator('.gate-state')).toContainText('Closed');
 
@@ -186,8 +219,45 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   ).toHaveCount(0);
   await expect(
     userPage.getByRole('link', { name: 'System', exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect((await browserJson(userPage, '/api/users')).status).toBe(403);
+  await openView(userPage, 'System');
+  await expect(
+    userPage.getByRole('heading', { name: 'Diagnostics', exact: true }),
+  ).toBeVisible();
+  await expect(
+    userPage.getByRole('heading', { name: 'Browser storage', exact: true }),
+  ).toBeVisible();
+  const versionResponse = await browserJson(userPage, '/api/version');
+  expect(versionResponse.status).toBe(200);
+  const { version } = versionResponse.body as { version: string };
+  expect(version).toMatch(/^[0-9a-f]{40}$/);
+  await expect(diagnosticValue(userPage, 'App version')).toHaveText(version);
+  await expect(diagnosticValue(userPage, 'Controller timezone')).toHaveText(
+    controllerTimezone,
+  );
+  await expect(diagnosticValue(userPage, 'Controller API')).toHaveText(
+    'Connected',
+  );
+  const memberGate = await browserJson(userPage, '/api/gate');
+  expect(memberGate.status).toBe(200);
+  const { lastContactTimestamp } = memberGate.body as {
+    lastContactTimestamp: number;
+  };
+  expect(lastContactTimestamp).toBeGreaterThan(0);
+  const contactTimes = diagnosticValue(userPage, 'Last agent sync').locator(
+    'time',
+  );
+  await expect(contactTimes).toHaveCount(2);
+  for (const time of await contactTimes.all()) {
+    await expect(time).toHaveAttribute(
+      'datetime',
+      new Date(lastContactTimestamp).toISOString(),
+    );
+    await expect(time).toBeVisible();
+  }
+  await expect(contactTimes.last()).toContainText(/ago$|^in /);
+  await expectNoPrivateDiagnostics(userPage, privateDiagnostics);
   await userPage.goto('/dashboard?view=access');
   await expect(
     userPage.getByRole('heading', { name: 'User Management' }),
@@ -244,6 +314,110 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await expect(
     page.getByRole('button', { name: 'Add manually', exact: true }),
   ).toBeFocused();
+});
+
+test('members retain system status through API failure and recovery', async ({
+  browser,
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  await openView(page, 'System');
+  const privateDiagnostics = [
+    await diagnosticValue(page, 'Database path').innerText(),
+    await diagnosticValue(page, 'Redis').innerText(),
+  ];
+  const username = `e2e-system-member-${Date.now().toString(36)}`;
+  const password = 'isolated-system-password';
+  const memberContext = await browser.newContext();
+  const memberPage = await memberContext.newPage();
+  let userCreated = false;
+
+  try {
+    const created = await browserJson(page, '/api/users', {
+      method: 'POST',
+      body: { username, password, role: 'user' },
+    });
+    userCreated = created.status === 200;
+    expect(created.status).toBe(200);
+    await login(memberPage, username, password);
+    const now = new Date();
+    const contactTimestamp = now.getTime();
+    const contactDate = now.toISOString();
+    let unavailable = false;
+    const commands: string[] = [];
+    const gateUrl = (url: URL) =>
+      url.pathname === '/api/gate' && url.search === '';
+    memberPage.on('request', (request) => {
+      if (gateUrl(new URL(request.url())) && request.method() !== 'GET') {
+        commands.push(request.method());
+      }
+    });
+    await memberPage.route(gateUrl, (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      return route.fulfill({
+        status: unavailable ? 503 : 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          unavailable
+            ? { error: 'Controller status unavailable' }
+            : { status: 'closed', lastContactTimestamp: contactTimestamp },
+        ),
+      });
+    });
+    await memberPage.goto('/dashboard?view=system');
+    const apiStatus = diagnosticValue(memberPage, 'Controller API');
+    const contactTimes = diagnosticValue(memberPage, 'Last agent sync').locator(
+      'time',
+    );
+    const refreshError = memberPage
+      .getByRole('main')
+      .getByRole('alert')
+      .filter({ hasText: 'Unable to refresh system status.' });
+    await expect(apiStatus).toHaveText('Connected');
+    await expect(contactTimes).toHaveCount(2);
+    await expect(contactTimes.first()).toHaveAttribute('datetime', contactDate);
+    await expectNoPrivateDiagnostics(memberPage, privateDiagnostics);
+
+    unavailable = true;
+    const failedRead = memberPage.waitForResponse(
+      (response) =>
+        gateUrl(new URL(response.url())) &&
+        response.request().method() === 'GET' &&
+        response.status() === 503,
+    );
+    await failedRead;
+    await expect(apiStatus).toHaveText('Unavailable');
+    await expect(refreshError).toBeVisible();
+    for (const time of await contactTimes.all()) {
+      await expect(time).toHaveAttribute('datetime', contactDate);
+      await expect(time).toBeVisible();
+    }
+
+    unavailable = false;
+    const recoveredRead = memberPage.waitForResponse(
+      (response) =>
+        gateUrl(new URL(response.url())) &&
+        response.request().method() === 'GET' &&
+        response.status() === 200,
+    );
+    await recoveredRead;
+    await expect(apiStatus).toHaveText('Connected');
+    await expect(refreshError).toHaveCount(0);
+    await expect(contactTimes.first()).toHaveAttribute('datetime', contactDate);
+    await expectNoPrivateDiagnostics(memberPage, privateDiagnostics);
+    expect(commands).toEqual([]);
+  } finally {
+    await memberContext.close();
+    if (userCreated) {
+      expect(
+        await browserJson(
+          page,
+          `/api/users?username=${encodeURIComponent(username)}`,
+          { method: 'DELETE' },
+        ),
+      ).toEqual({ status: 204, body: null });
+    }
+  }
 });
 
 test('sign-in errors allow another attempt and sign-out ends the session', async ({

@@ -15,7 +15,6 @@ function Brand() {
       </span>
       <span>
         Gate<span className="brand-light"> Controller</span>
-        <span className="brand-period">.</span>
       </span>
     </Link>
   );
@@ -27,34 +26,18 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-story" aria-label="Welcome to Gate Controller">
+      <section className="login-story" aria-label="Gate Controller">
         <Brand />
         <div className="login-story-copy">
-          <span className="eyebrow">A WARMER WELCOME HOME</span>
-          <h2>
-            A smoother
-            <br />
-            way in.
-          </h2>
-          <p>
-            A little control. A daily routine.
-            <br />
-            One less thing to think about.
-          </p>
           <GateIllustration open={false} />
         </div>
-        <span className="login-story-footer">
-          YOUR GATE. YOUR SPACE. YOUR PACE.
-        </span>
       </section>
       <section className="login-panel" aria-labelledby="login-heading">
         <div className="login-form">
           <div className="login-mobile-brand">
             <Brand />
           </div>
-          <p className="eyebrow">GATE CONTROLLER</p>
-          <h1 id="login-heading">Welcome back.</h1>
-          <p className="muted">Sign in to make yourself at home.</p>
+          <h1 id="login-heading">Sign in</h1>
           <Form action={formAction}>
             {state?.error && (
               <div className="inline-alert" role="alert">
@@ -77,7 +60,6 @@ export default function LoginPage() {
                 autoCapitalize="none"
                 spellCheck={false}
                 className="field"
-                placeholder="Your username"
                 disabled={pending}
               />
             </div>
@@ -92,7 +74,6 @@ export default function LoginPage() {
                 required
                 autoComplete="current-password"
                 className="field"
-                placeholder="Your password"
                 disabled={pending}
               />
             </div>
@@ -107,7 +88,7 @@ export default function LoginPage() {
             </button>
           </Form>
           <p className="login-note">
-            Access is managed by your gate administrator.
+            Contact an administrator if you need access.
           </p>
         </div>
       </section>

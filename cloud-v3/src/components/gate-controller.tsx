@@ -87,7 +87,7 @@ export function GateController() {
       >
         {isError
           ? 'Unable to load the gate. Check your connection and try again.'
-          : 'Loading your gate…'}
+          : 'Loading gate status…'}
         {isError && (
           <button className="button button-secondary" onClick={() => mutate()}>
             Try again
@@ -263,8 +263,7 @@ export function GateController() {
         ) : (
           <div className="empty-state">
             <Icon name="activity" />
-            <h3>A fresh start.</h3>
-            <p>Gate commands will appear here as they happen.</p>
+            <h3>No commands yet</h3>
           </div>
         )}
       </section>

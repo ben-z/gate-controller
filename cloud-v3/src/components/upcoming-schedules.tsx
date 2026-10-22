@@ -72,8 +72,8 @@ export function UpcomingSchedules() {
         <span className="empty-icon">
           <Icon name="calendar" />
         </span>
-        <h3>Your time. Your routine.</h3>
-        <p>Add a schedule and your next gate command will appear here.</p>
+        <h3>No upcoming schedules</h3>
+        <p>Add or enable a schedule.</p>
       </div>
     );
 

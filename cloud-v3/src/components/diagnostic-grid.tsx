@@ -1,4 +1,6 @@
-type DiagnosticItem = readonly [label: string, value: string];
+import type { ReactNode } from 'react';
+
+type DiagnosticItem = readonly [label: string, value: ReactNode];
 
 export function DiagnosticGrid({
   items,

@@ -36,6 +36,9 @@ export default async function DashboardPage({
     case 'access':
       fallback['/api/users'] = getUsers();
       break;
+    case 'system':
+      fallback['/api/gate'] = getGateStatus(false);
+      break;
   }
 
   return (
@@ -48,7 +51,7 @@ export default async function DashboardPage({
         username={user.username}
         isAdmin={isAdmin}
         view={view}
-        diagnostics={current.id === 'system' ? <DiagnosticsPanel /> : null}
+        diagnostics={current.id === 'system' ? <DiagnosticsPanel isAdmin={isAdmin} /> : null}
       />
     </SWRConfig>
   );

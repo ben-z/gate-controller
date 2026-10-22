@@ -298,7 +298,7 @@ export function ScheduleManager() {
               <h2 id="schedule-editor-title" className="section-heading">
                 {editor.original
                   ? 'Edit schedule'
-                  : 'Add a schedule manually'}
+                  : 'Add schedule'}
               </h2>
               <p className="muted">
                 Times use {publicConfig.controllerTimezone}.
@@ -441,10 +441,9 @@ export function ScheduleManager() {
                 <Icon name="sparkle" />
               </span>
               <div className="min-w-0">
-                <h2 id="schedule-compose-title" className="section-heading">Tell us your routine</h2>
+                <h2 id="schedule-compose-title" className="section-heading">Create a schedule</h2>
                 <p className="muted">
-                  Describe it in your own words. Review the times before adding
-                  them.
+                  Describe when to open or close the gate, then review the draft.
                 </p>
               </div>
             </div>
@@ -536,7 +535,6 @@ export function ScheduleManager() {
         >
           <div className="card-header">
             <div>
-              <p className="eyebrow">READY TO REVIEW</p>
               <h2
                 id="draft-review-title"
                 className="section-heading"
@@ -664,7 +662,7 @@ export function ScheduleManager() {
         <div className="card-header">
           <div>
             <h2 id="saved-schedules-title" className="section-heading">
-              Your schedules <span className="muted">({schedules.length})</span>
+              Schedules <span className="muted">({schedules.length})</span>
             </h2>
             <p className="muted">
               {schedules.filter((schedule) => schedule.enabled).length} active ·{' '}
@@ -676,11 +674,7 @@ export function ScheduleManager() {
         {schedules.length === 0 ? (
           <div className="empty-state">
             <Icon name="calendar" />
-            <h3>Your routine starts here</h3>
-            <p>
-              Describe when your gate should open or close to add your first
-              schedule.
-            </p>
+            <h3>No schedules</h3>
           </div>
         ) : (
           <ul className="schedule-list">

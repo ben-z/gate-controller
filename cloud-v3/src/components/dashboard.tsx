@@ -13,29 +13,21 @@ const views = [
     id: 'overview',
     label: 'Overview',
     icon: 'gate',
-    title: 'Your gate, at a glance.',
-    description: 'Gate commands, recent activity, and what’s next.',
   },
   {
     id: 'schedules',
     label: 'Schedules',
     icon: 'calendar',
-    title: 'A schedule that fits your day.',
-    description: 'Set recurring times to open and close your gate.',
   },
   {
     id: 'access',
     label: 'Access',
     icon: 'users',
-    title: 'Give the right people access.',
-    description: 'Manage the people who can control your gate.',
   },
   {
     id: 'system',
     label: 'System',
     icon: 'settings',
-    title: 'Keep an eye on your system.',
-    description: 'Controller configuration and browser diagnostics.',
   },
 ] as const;
 
@@ -44,7 +36,7 @@ export function getDashboardNavigation(
   isAdmin: boolean,
 ) {
   const availableViews = views.filter(
-    (item) => isAdmin || item.id === 'overview' || item.id === 'schedules',
+    (item) => isAdmin || item.id !== 'access',
   );
   return {
     availableViews,
@@ -82,7 +74,6 @@ export function Dashboard({
             </span>
             <span>
               Gate<span className="brand-light"> Controller</span>
-              <span className="brand-period">.</span>
             </span>
           </Link>
           <div className="account">
@@ -132,11 +123,7 @@ export function Dashboard({
         </nav>
         <main id="main-content" tabIndex={-1}>
           <div className="page-intro">
-            <p className="eyebrow">
-              {current.label} <span>/</span> Gate Controller
-            </p>
-            <h1>{current.title}</h1>
-            <p className="muted">{current.description}</p>
+            <h1>{current.label}</h1>
           </div>
           {current.id === 'system' ? (
             <div className="view-content">{diagnostics}</div>
@@ -148,15 +135,6 @@ export function Dashboard({
             </ViewContent>
           )}
         </main>
-        <footer className="app-footer">
-          <span>
-            <Icon name="gate" /> A smoother way in.
-          </span>
-          <span>
-            Gate Controller <span className="footer-divider">/</span>{' '}
-            {publicConfig.controllerTimezone.replaceAll('_', ' ')}
-          </span>
-        </footer>
       </div>
     </div>
   );
