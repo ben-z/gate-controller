@@ -2,7 +2,7 @@
 
 
 # Adjust NODE_VERSION as desired
-ARG NODE_VERSION=22.11.0
+ARG NODE_VERSION=22.23.4
 FROM node:${NODE_VERSION}-slim AS base
 
 LABEL fly_launch_runtime="Next.js"
