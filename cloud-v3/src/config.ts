@@ -24,6 +24,7 @@ function parsePort(value: string | undefined, fallback: number): number {
 
 export const publicConfig = {
   controllerTimezone: process.env.NEXT_PUBLIC_CONTROLLER_TIMEZONE || "UTC",
+  gateContactStaleAfterMs: 60_000,
 } as const;
 
 export const config = {

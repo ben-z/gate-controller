@@ -8,10 +8,7 @@ export async function getInitialData(includeUsers: boolean) {
     includeUsers ? getUsers() : [],
   ]);
 
-  const upcomingSchedules = await getUpcomingSchedules(schedules).catch((error) => {
-    console.error("Failed to preload upcoming schedules:", error);
-    return [];
-  });
+  const upcomingSchedules = await getUpcomingSchedules(schedules);
 
   return {
     gateStatus,

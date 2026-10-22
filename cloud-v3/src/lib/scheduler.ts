@@ -150,9 +150,9 @@ export async function getUpcomingSchedules(
       return [];
     }
 
-    const nextExecution = (job.opts.timestamp ?? 0) + (job.opts.delay ?? 0);
+    const nextExecution = job.timestamp + job.delay;
     if (!Number.isFinite(nextExecution) || nextExecution <= 0) {
-      return [];
+      throw new Error(`Invalid execution time for schedule "${scheduleName}"`);
     }
 
     return {

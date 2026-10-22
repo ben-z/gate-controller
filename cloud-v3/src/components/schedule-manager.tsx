@@ -1,6 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useSWRConfig } from 'swr';
+import cronstrue from 'cronstrue';
+import { formatInTimeZone } from 'date-fns-tz';
+import { Icon } from '@/components/icon';
+import { publicConfig } from '@/config';
 import {
   createSchedule,
   deleteSchedule,
@@ -8,17 +13,14 @@ import {
   updateSchedule,
   useSchedules,
 } from '@/hooks/useSchedules';
-import { publicConfig } from '@/config';
-import cronstrue from 'cronstrue';
 import {
-  Schedule,
   ScheduleDraft,
   ScheduleDraftProgress,
   ScheduleDraftResponse,
   ScheduleInput,
 } from '@/types/schedule';
 
-const DEFAULT_FORM_DATA: ScheduleInput = Object.freeze({
+const EMPTY_SCHEDULE: ScheduleInput = Object.freeze({
   name: '',
   cron_expression: '',
   action: 'close',
@@ -28,703 +30,644 @@ const DEFAULT_FORM_DATA: ScheduleInput = Object.freeze({
 const PROMPT_EXAMPLES = [
   'Open weekdays at 7:30 AM',
   'Close every night at 6 PM',
-  'Open Saturday and Sunday at 9 AM',
+  'Open weekends at 9 AM',
 ];
 
+type Editor = {
+  originalName: string | null;
+  draftName: string | null;
+  data: ScheduleInput;
+};
+
 export function ScheduleManager() {
-  const { schedules, isLoading, isError, mutate } = useSchedules();
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingName, setEditingName] = useState<string | null>(null);
+  const { schedules, isError, mutate } = useSchedules();
+  const { mutate: revalidate } = useSWRConfig();
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<ScheduleInput>(DEFAULT_FORM_DATA);
-  const [cronError, setCronError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [draftResult, setDraftResult] = useState<ScheduleDraftResponse | null>(null);
-  const [draftProgress, setDraftProgress] = useState<ScheduleDraftProgress | null>(null);
-  const [isDrafting, setIsDrafting] = useState(false);
-  const [applyingDraft, setApplyingDraft] = useState<string | null>(null);
+  const [draftResult, setDraftResult] = useState<ScheduleDraftResponse | null>(
+    null,
+  );
+  const [draftProgress, setDraftProgress] =
+    useState<ScheduleDraftProgress | null>(null);
+  const promptInput = useRef<HTMLTextAreaElement>(null);
+  const editorInput = useRef<HTMLInputElement>(null);
+  const busy = pending !== null;
 
-  const validateCronExpression = (expression: string): boolean => {
+  async function refreshSchedules() {
+    await Promise.all([mutate(), revalidate('/api/schedules/upcoming')]);
+  }
+
+  async function runAction(operation: string, action: () => Promise<void>) {
+    setPending(operation);
+    setError(null);
+    setNotice(null);
     try {
-      if (expression.trim().split(/\s+/).length !== 5) {
-        throw new Error('Expected five cron fields');
-      }
-      cronstrue.toString(expression);
-      setCronError(null);
-      return true;
-    } catch {
-      setCronError('Invalid cron expression');
-      return false;
+      await action();
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'The schedule could not be updated.',
+      );
+    } finally {
+      setPending(null);
     }
-  };
+  }
 
-  const handleDraftSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt) return;
+  function removeAppliedDraft(name: string) {
+    setDraftResult((current) => {
+      if (!current) return null;
+      const drafts = current.drafts.filter((draft) => draft.name !== name);
+      return drafts.length ? { ...current, drafts } : null;
+    });
+  }
 
-    try {
-      setError(null);
-      setIsDrafting(true);
+  function openEditor(next: Editor) {
+    setEditor(next);
+    setError(null);
+    requestAnimationFrame(() => {
+      const input = editorInput.current;
+      input?.scrollIntoView({ block: 'center' });
+      input?.focus({ preventScroll: true });
+    });
+  }
+
+  function handleDraftSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    void runAction('draft', async () => {
       setDraftResult(null);
       setDraftProgress({
         title: 'Starting draft',
-        detail: 'Preparing the schedule request.',
+        detail: 'Preparing your schedule.',
       });
-      setDraftResult(await draftSchedules(trimmedPrompt, setDraftProgress));
-    } catch (error) {
-      console.error('Failed to draft schedules:', error);
-      setError(error instanceof Error ? error.message : 'Failed to draft schedules');
-    } finally {
-      setIsDrafting(false);
-      setDraftProgress(null);
-    }
-  };
-
-  const handleApplyDraft = async (draft: ScheduleDraft) => {
-    try {
-      setError(null);
-      setApplyingDraft(draft.name);
-      await createSchedule(toScheduleInput(draft));
-      setDraftResult((current) => {
-        if (!current) return current;
-        const drafts = current.drafts.filter((item) => item.name !== draft.name);
-        return drafts.length ? { ...current, drafts } : null;
-      });
-      await mutate();
-    } catch (error) {
-      console.error('Failed to apply schedule draft:', error);
-      setError(error instanceof Error ? error.message : 'Failed to apply schedule draft');
-    } finally {
-      setApplyingDraft(null);
-    }
-  };
-
-  const handleApplyAllDrafts = async () => {
-    if (!draftResult?.drafts.length) return;
-
-    try {
-      setError(null);
-      setApplyingDraft('all');
-      for (const draft of draftResult.drafts) {
-        await createSchedule(toScheduleInput(draft));
+      try {
+        setDraftResult(await draftSchedules(prompt.trim(), setDraftProgress));
+      } finally {
+        setDraftProgress(null);
       }
-      setDraftResult(null);
-      setPrompt('');
-      await mutate();
-    } catch (error) {
-      console.error('Failed to apply schedule drafts:', error);
-      setError(error instanceof Error ? error.message : 'Failed to apply schedule drafts');
-    } finally {
-      setApplyingDraft(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!validateCronExpression(formData.cron_expression)) {
-      return;
-    }
-
-    try {
-      if (editingName) {
-        await updateSchedule(editingName, formData);
-      } else {
-        await createSchedule(formData);
-      }
-      setEditingName(null);
-      setIsFormOpen(false);
-      setFormData(DEFAULT_FORM_DATA);
-      await mutate();
-    } catch (error) {
-      console.error('Failed to save schedule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save schedule');
-    }
-  };
-
-  const handleEdit = (schedule: Schedule) => {
-    setIsFormOpen(true);
-    setEditingName(schedule.name);
-    setFormData({
-      name: schedule.name,
-      cron_expression: schedule.cron_expression,
-      action: schedule.action,
-      enabled: schedule.enabled,
     });
-  };
+  }
 
-  const handleEditDraft = (draft: ScheduleDraft) => {
-    setIsFormOpen(true);
-    setEditingName(null);
-    setFormData(toScheduleInput(draft));
-  };
-
-  const handleDelete = async (name: string) => {
-    if (!confirm('Are you sure you want to delete this schedule?')) return;
-    try {
-      setError(null);
-      await deleteSchedule(name);
-      mutate();
-    } catch (error) {
-      console.error('Failed to delete schedule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to delete schedule');
-    }
-  };
-
-  const handleCancel = () => {
-    setIsFormOpen(false);
-    setEditingName(null);
-    setFormData(DEFAULT_FORM_DATA);
-    setCronError(null);
-  };
-
-  const handleCronChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setFormData({ ...formData, cron_expression: value });
-    if (value) {
-      validateCronExpression(value);
-    } else {
-      setCronError(null);
-    }
-  };
-
-  const getCronDescription = (cron_expression: string) => {
-    try {
-      if (cron_expression.trim().split(/\s+/).length !== 5) {
-        throw new Error('Expected five cron fields');
+  function applyDrafts(drafts: ScheduleDraft[], operation: string) {
+    void runAction(operation, async () => {
+      for (const draft of drafts) {
+        await createSchedule(toScheduleInput(draft));
+        removeAppliedDraft(draft.name);
+        await refreshSchedules();
       }
-      return cronstrue.toString(cron_expression);
-    } catch {
-      return `Invalid cron expression: ${cron_expression}`;
-    }
-  };
+      setNotice(
+        drafts.length === 1
+          ? 'Schedule added.'
+          : `${drafts.length} schedules added.`,
+      );
+      setPrompt('');
+    });
+  }
+
+  function handleSave(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editor || cronDescription(editor.data.cron_expression).invalid) return;
+    void runAction('save', async () => {
+      if (editor.originalName) {
+        await updateSchedule(editor.originalName, editor.data);
+      } else {
+        await createSchedule(editor.data);
+      }
+      if (editor.draftName) removeAppliedDraft(editor.draftName);
+      setEditor(null);
+      await refreshSchedules();
+      setNotice(editor.originalName ? 'Schedule updated.' : 'Schedule added.');
+    });
+  }
+
+  function handleDelete(name: string) {
+    if (!confirm(`Delete schedule “${name}”?`)) return;
+    void runAction(`delete:${name}`, async () => {
+      await deleteSchedule(name);
+      if (editor?.originalName === name) setEditor(null);
+      await refreshSchedules();
+      setNotice('Schedule deleted.');
+    });
+  }
 
   if (isError) {
-    return <div>Error loading schedules</div>;
+    return (
+      <div role="alert" className="inline-alert">
+        Schedules could not be loaded. Refresh the page to try again.
+      </div>
+    );
   }
-
-  if (isLoading && !schedules) {
-    return <div>Loading schedules...</div>;
-  }
-
   if (!schedules) {
-    return <div>No schedules available</div>;
+    return (
+      <div role="status" className="empty-state">
+        Loading schedules…
+      </div>
+    );
   }
+
+  const cron = editor ? cronDescription(editor.data.cron_expression) : null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">AUTOMATION</p>
+          <h2>Schedules</h2>
+          <p className="muted">
+            Set recurring times to open and close your gate.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="button button-secondary"
+          disabled={busy || editor !== null}
+          onClick={() =>
+            openEditor({
+              originalName: null,
+              draftName: null,
+              data: EMPTY_SCHEDULE,
+            })
+          }
+        >
+          <Icon name="plus" /> Add Schedule
+        </button>
+      </div>
+
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/50 dark:text-red-300">
+        <div role="alert" className="inline-alert">
+          <Icon name="alert" />
           {error}
         </div>
       )}
+      {notice && (
+        <p role="status" className="success-notice">
+          <Icon name="check" />
+          {notice}
+        </p>
+      )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-semibold">Schedules</h2>
-        {!isFormOpen && (
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-          >
-            Add Schedule
-          </button>
-        )}
-      </div>
-
-      <form
-        onSubmit={handleDraftSubmit}
-        className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
-      >
-        <label htmlFor="schedule-prompt" className="block text-sm font-medium">
-          Describe schedule
-        </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <textarea
-            id="schedule-prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={2}
-            className="min-h-20 flex-1 resize-y rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
-            placeholder="Open weekdays at 7:30 AM and close at 6 PM"
-          />
-          <button
-            type="submit"
-            disabled={isDrafting || !prompt.trim()}
-            className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400 sm:self-start"
-          >
-            {isDrafting ? 'Drafting...' : 'Draft'}
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PROMPT_EXAMPLES.map((example) => (
+      {editor && (
+        <section className="card" aria-labelledby="schedule-editor-title">
+          <div className="card-header">
+            <div>
+              <h3 id="schedule-editor-title">
+                {editor.originalName
+                  ? 'Edit schedule'
+                  : 'Add a schedule manually'}
+              </h3>
+              <p className="muted">
+                Times use {publicConfig.controllerTimezone}.
+              </p>
+            </div>
             <button
-              key={example}
               type="button"
-              onClick={() => setPrompt(example)}
-              className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-white dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="icon-button"
+              aria-label="Close schedule editor"
+              disabled={busy}
+              onClick={() => setEditor(null)}
             >
-              {example}
+              <Icon name="close" />
             </button>
-          ))}
-        </div>
-        {draftProgress && <DraftingNotice progress={draftProgress} />}
-      </form>
+          </div>
+          <form onSubmit={handleSave} className="card-body">
+            <fieldset disabled={busy} className="form-grid">
+              <div>
+                <label htmlFor="schedule-name" className="field-label">
+                  Name
+                </label>
+                <input
+                  ref={editor.originalName ? undefined : editorInput}
+                  id="schedule-name"
+                  className="field"
+                  value={editor.data.name}
+                  disabled={editor.originalName !== null}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: { ...editor.data, name: event.target.value },
+                    })
+                  }
+                  placeholder="Weekday arrival"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="schedule-action" className="field-label">
+                  Action
+                </label>
+                <select
+                  id="schedule-action"
+                  className="field"
+                  value={editor.data.action}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: {
+                        ...editor.data,
+                        action: event.target.value as 'open' | 'close',
+                      },
+                    })
+                  }
+                >
+                  <option value="close">Close</option>
+                  <option value="open">Open</option>
+                </select>
+              </div>
+              <div className="field-wide">
+                <label htmlFor="schedule-cron" className="field-label">
+                  Cron Expression
+                </label>
+                <input
+                  ref={editor.originalName ? editorInput : undefined}
+                  id="schedule-cron"
+                  className="field font-mono"
+                  value={editor.data.cron_expression}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: {
+                        ...editor.data,
+                        cron_expression: event.target.value,
+                      },
+                    })
+                  }
+                  placeholder="0 8 * * 1-5"
+                  aria-invalid={cron?.invalid}
+                  aria-describedby="schedule-cron-help"
+                  required
+                />
+                <p
+                  id="schedule-cron-help"
+                  className={
+                    cron?.invalid ? 'field-hint text-red-700' : 'field-hint'
+                  }
+                >
+                  {cron?.description}
+                </p>
+              </div>
+              <label
+                className="check-field field-wide"
+                htmlFor="schedule-enabled"
+              >
+                <input
+                  id="schedule-enabled"
+                  type="checkbox"
+                  checked={editor.data.enabled}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: { ...editor.data, enabled: event.target.checked },
+                    })
+                  }
+                />
+                Enable this schedule
+              </label>
+              <div className="form-actions field-wide">
+                <button
+                  type="submit"
+                  className="button button-primary"
+                  disabled={cron?.invalid}
+                >
+                  {pending === 'save'
+                    ? 'Saving…'
+                    : `${editor.originalName ? 'Update' : 'Create'} Schedule`}
+                </button>
+                <button
+                  type="button"
+                  className="button button-ghost"
+                  onClick={() => setEditor(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </fieldset>
+          </form>
+        </section>
+      )}
+
+      <section
+        className="card schedule-composer"
+        aria-labelledby="schedule-compose-title"
+      >
+        <form onSubmit={handleDraftSubmit} className="card-body space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="schedule-icon">
+              <Icon name="sparkle" />
+            </span>
+            <div>
+              <h3 id="schedule-compose-title">Tell us your routine</h3>
+              <p className="muted">
+                Describe it in your own words. Review the times before adding
+                them.
+              </p>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="schedule-prompt" className="field-label">
+              Describe schedule
+            </label>
+            <textarea
+              ref={promptInput}
+              id="schedule-prompt"
+              className="field min-h-28 resize-y"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Open on weekdays at 7:30 AM and close at 6 PM…"
+              rows={3}
+              disabled={busy}
+              aria-describedby="schedule-timezone"
+              required
+            />
+          </div>
+          <div className="prompt-examples">
+            {PROMPT_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="prompt-example"
+                disabled={busy}
+                onClick={() => {
+                  setPrompt(example);
+                  promptInput.current?.focus();
+                }}
+              >
+                {example}
+                <Icon name="plus" />
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p id="schedule-timezone" className="field-hint">
+              <Icon name="clock" />
+              All times in {publicConfig.controllerTimezone}
+            </p>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={busy || !prompt.trim()}
+            >
+              <Icon name="sparkle" />
+              {pending === 'draft' ? 'Drafting…' : 'Draft'}
+            </button>
+          </div>
+          {draftProgress && (
+            <div role="status" className="draft-progress" aria-live="polite">
+              <span className="status-dot animate-pulse" />
+              <div>
+                <strong>{draftProgress.title}</strong>
+                <p>{draftProgress.detail}</p>
+                <p className="field-hint">No gate command is being sent.</p>
+              </div>
+            </div>
+          )}
+        </form>
+      </section>
 
       {draftResult && (
-        <DraftReview
-          result={draftResult}
-          applyingDraft={applyingDraft}
-          onApply={handleApplyDraft}
-          onApplyAll={handleApplyAllDrafts}
-          onEdit={handleEditDraft}
-        />
-      )}
-
-      {isFormOpen && (
-        <ScheduleForm
-          cronError={cronError}
-          editingName={editingName}
-          formData={formData}
-          getCronDescription={getCronDescription}
-          onCancel={handleCancel}
-          onCronChange={handleCronChange}
-          onSubmit={handleSubmit}
-          setFormData={setFormData}
-        />
-      )}
-
-      {schedules.length > 0 ? (
-        <ScheduleList
-          schedules={schedules}
-          getCronDescription={getCronDescription}
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-        />
-      ) : (
-        <div className="py-12 text-center text-gray-500 dark:text-gray-400">
-          No schedules found.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DraftingNotice({ progress }: { progress: ScheduleDraftProgress }) {
-  return (
-    <div
-      className="rounded-lg border border-blue-200 bg-white p-3 text-sm dark:border-blue-900 dark:bg-gray-900"
-      aria-live="polite"
-    >
-      <div className="flex items-start gap-3">
-        <span className="mt-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-blue-600" />
-        <div className="min-w-0">
-          <div className="font-medium text-gray-900 dark:text-gray-100">
-            {progress.title}
+        <section
+          className="card schedule-review"
+          aria-labelledby="draft-review-title"
+        >
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">READY TO REVIEW</p>
+              <h3 id="draft-review-title">Review Drafts</h3>
+              <p className="muted">{draftResult.interpretation}</p>
+            </div>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="button button-ghost"
+                disabled={busy}
+                onClick={() => setDraftResult(null)}
+              >
+                Dismiss
+              </button>
+              {draftResult.drafts.length > 0 && (
+                <button
+                  type="button"
+                  className="button button-primary"
+                  disabled={busy}
+                  onClick={() => applyDrafts(draftResult.drafts, 'apply:all')}
+                >
+                  {pending === 'apply:all' ? 'Applying…' : 'Apply All'}
+                </button>
+              )}
+            </div>
           </div>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">{progress.detail}</p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            No gate command is being sent.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DraftReview({
-  applyingDraft,
-  onApply,
-  onApplyAll,
-  onEdit,
-  result,
-}: {
-  applyingDraft: string | null;
-  onApply: (draft: ScheduleDraft) => void;
-  onApplyAll: () => void;
-  onEdit: (draft: ScheduleDraft) => void;
-  result: ScheduleDraftResponse;
-}) {
-  const hasDrafts = result.drafts.length > 0;
-
-  return (
-    <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="font-medium">Review Drafts</h3>
-          {result.interpretation && (
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-              {result.interpretation}
-            </p>
-          )}
-        </div>
-        {hasDrafts && (
-          <button
-            type="button"
-            onClick={onApplyAll}
-            disabled={applyingDraft !== null}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-          >
-            {applyingDraft === 'all' ? 'Applying...' : 'Apply All'}
-          </button>
-        )}
-      </div>
-
-      <NoticeList tone="amber" items={result.questions} />
-      <NoticeList tone="gray" items={result.warnings} />
-
-      {hasDrafts ? (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {result.drafts.map((draft) => (
-            <div
-              key={draft.name}
-              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium">{draft.name}</div>
-                  <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {draft.summary || draft.description}
-                  </div>
-                </div>
-                <ActionBadge action={draft.action} />
-              </div>
-              <div className="mt-3 font-mono text-xs text-gray-500 dark:text-gray-400">
-                {draft.cron_expression}
-              </div>
-              <div className="mt-3 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                {draft.nextExecutions.slice(0, 3).map((execution) => (
-                  <div key={execution}>{formatExecution(execution)}</div>
+          <div className="card-body space-y-4">
+            {draftResult.questions.length > 0 && (
+              <ul className="inline-alert">
+                {draftResult.questions.map((question) => (
+                  <li key={question}>{question}</li>
                 ))}
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onApply(draft)}
-                  disabled={applyingDraft !== null}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                >
-                  {applyingDraft === draft.name ? 'Applying...' : 'Apply'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onEdit(draft)}
-                  className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg bg-white p-4 text-sm text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-          No draft schedules.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NoticeList({ items, tone }: { items: string[]; tone: 'amber' | 'gray' }) {
-  if (items.length === 0) return null;
-
-  const classes =
-    tone === 'amber'
-      ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
-      : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300';
-
-  return (
-    <div className={`space-y-1 rounded-lg border p-3 text-sm ${classes}`}>
-      {items.map((item) => (
-        <div key={item}>{item}</div>
-      ))}
-    </div>
-  );
-}
-
-function ScheduleForm({
-  cronError,
-  editingName,
-  formData,
-  getCronDescription,
-  onCancel,
-  onCronChange,
-  onSubmit,
-  setFormData,
-}: {
-  cronError: string | null;
-  editingName: string | null;
-  formData: ScheduleInput;
-  getCronDescription: (cronExpression: string) => string;
-  onCancel: () => void;
-  onCronChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onSubmit: (e: React.FormEvent) => void;
-  setFormData: (data: ScheduleInput) => void;
-}) {
-  return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
-    >
-      <div>
-        <label htmlFor="schedule-name" className="mb-1 block text-sm font-medium">
-          Name
-        </label>
-        <input
-          id="schedule-name"
-          type="text"
-          value={formData.name}
-          disabled={!!editingName}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className={`w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 ${
-            !!editingName
-              ? 'border-gray-300 bg-gray-100 text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400'
-              : 'border-gray-300 dark:border-gray-700'
-          }`}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="schedule-cron-expression" className="mb-1 block text-sm font-medium">
-          Cron Expression
-        </label>
-        <input
-          id="schedule-cron-expression"
-          type="text"
-          value={formData.cron_expression}
-          onChange={onCronChange}
-          className={`w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 ${
-            cronError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-700'
-          }`}
-          placeholder="0 8 * * 1-5"
-          required
-        />
-        {formData.cron_expression && (
-          <p
-            className={`mt-1 text-sm ${
-              cronError ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'
-            }`}
-          >
-            {cronError || getCronDescription(formData.cron_expression)}
-          </p>
-        )}
-      </div>
-      <div>
-        <label htmlFor="schedule-action" className="mb-1 block text-sm font-medium">
-          Action
-        </label>
-        <select
-          id="schedule-action"
-          value={formData.action}
-          onChange={(e) =>
-            setFormData({ ...formData, action: e.target.value as 'open' | 'close' })
-          }
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
-        >
-          <option value="close">Close</option>
-          <option value="open">Open</option>
-        </select>
-      </div>
-      <div className="flex items-center">
-        <input
-          type="checkbox"
-          id="enabled"
-          checked={formData.enabled}
-          onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-        />
-        <label htmlFor="enabled" className="ml-2 block text-sm">
-          Enabled
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          {editingName ? 'Update' : 'Create'} Schedule
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ScheduleList({
-  getCronDescription,
-  onDelete,
-  onEdit,
-  schedules,
-}: {
-  getCronDescription: (cronExpression: string) => string;
-  onDelete: (name: string) => void;
-  onEdit: (schedule: Schedule) => void;
-  schedules: Schedule[];
-}) {
-  return (
-    <>
-      <div className="space-y-3 sm:hidden">
-        {schedules.map((schedule) => (
-          <div
-            key={schedule.name}
-            className="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-800/50"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-medium">{schedule.name}</div>
-                <div className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400">
-                  {schedule.cron_expression}
-                </div>
-              </div>
-              <ScheduleStatus enabled={schedule.enabled} />
-            </div>
-            <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              {getCronDescription(schedule.cron_expression)}
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="text-gray-600 dark:text-gray-400">
-                Action:{' '}
-                <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {schedule.action}
-                </span>
-              </span>
-              <div className="shrink-0 text-sm">
-                <button
-                  onClick={() => onEdit(schedule)}
-                  className="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => onDelete(schedule.name)}
-                  className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="hidden overflow-x-auto rounded-lg bg-gray-50 dark:bg-gray-800/50 sm:block">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-100 dark:bg-gray-800">
-            <tr>
-              <TableHeader>Schedule</TableHeader>
-              <TableHeader>Cron Expression</TableHeader>
-              <TableHeader>Action</TableHeader>
-              <TableHeader>Status</TableHeader>
-              <TableHeader align="right">Actions</TableHeader>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-transparent">
-            {schedules.map((schedule) => (
-              <tr key={schedule.name}>
-                <td className="whitespace-nowrap px-6 py-4 text-sm">{schedule.name}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm">
-                  <div>{schedule.cron_expression}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {getCronDescription(schedule.cron_expression)}
+              </ul>
+            )}
+            {draftResult.warnings.length > 0 && (
+              <ul className="field-hint">
+                {draftResult.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            )}
+            <div className="draft-grid">
+              {draftResult.drafts.map((draft) => (
+                <article key={draft.name} className="draft-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4>{draft.name}</h4>
+                    <span className="status-pill neutral">
+                      {draft.action === 'open' ? 'Open' : 'Close'} gate
+                    </span>
                   </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm">{schedule.action}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm">
-                  <ScheduleStatus enabled={schedule.enabled} />
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
+                  <p className="muted mt-2">
+                    {draft.summary || draft.description}
+                  </p>
+                  <p className="field-hint mt-3 font-mono">
+                    {draft.cron_expression}
+                  </p>
+                  <ul className="space-y-1 mt-3 text-sm">
+                    {draft.nextExecutions.slice(0, 3).map((execution) => (
+                      <li key={execution}>{formatExecution(execution)}</li>
+                    ))}
+                  </ul>
+                  <div className="form-actions mt-4">
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      disabled={busy}
+                      onClick={() =>
+                        applyDrafts([draft], `apply:${draft.name}`)
+                      }
+                    >
+                      {pending === `apply:${draft.name}`
+                        ? 'Applying…'
+                        : 'Apply'}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        openEditor({
+                          originalName: null,
+                          draftName: draft.name,
+                          data: toScheduleInput(draft),
+                        })
+                      }
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {draftResult.drafts.length === 0 && (
+              <p className="muted">
+                Add more detail to your description to create a schedule.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className="card" aria-labelledby="saved-schedules-title">
+        <div className="card-header">
+          <div>
+            <h3 id="saved-schedules-title">
+              Your schedules <span className="muted">({schedules.length})</span>
+            </h3>
+            <p className="muted">
+              {schedules.filter((schedule) => schedule.enabled).length} active ·{' '}
+              {publicConfig.controllerTimezone}
+            </p>
+          </div>
+          <Icon name="calendar" />
+        </div>
+        {schedules.length === 0 ? (
+          <div className="empty-state">
+            <Icon name="calendar" />
+            <h4>Your routine starts here</h4>
+            <p>
+              Describe when your gate should open or close to add your first
+              schedule.
+            </p>
+          </div>
+        ) : (
+          <ul className="schedule-list">
+            {schedules.map((schedule) => (
+              <li key={schedule.name} className="schedule-row">
+                <span className="schedule-icon">
+                  <Icon
+                    name={
+                      schedule.action === 'open'
+                        ? 'arrow-up-right'
+                        : 'arrow-down-right'
+                    }
+                  />
+                </span>
+                <div className="schedule-copy">
+                  <h4>{schedule.name}</h4>
+                  <p className="muted">
+                    {schedule.action === 'open' ? 'Open' : 'Close'} gate ·{' '}
+                    {cronDescription(schedule.cron_expression).description}
+                  </p>
+                  <p className="field-hint font-mono">
+                    {schedule.cron_expression}
+                  </p>
+                </div>
+                <div className="row-actions">
                   <button
-                    onClick={() => onEdit(schedule)}
-                    className="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    type="button"
+                    role="switch"
+                    aria-checked={schedule.enabled}
+                    aria-label={`Enable ${schedule.name}`}
+                    className="schedule-switch"
+                    disabled={busy}
+                    onClick={() =>
+                      void runAction(`toggle:${schedule.name}`, async () => {
+                        await updateSchedule(schedule.name, {
+                          enabled: !schedule.enabled,
+                        });
+                        await refreshSchedules();
+                        setNotice(
+                          `${schedule.name} ${schedule.enabled ? 'paused' : 'enabled'}.`,
+                        );
+                      })
+                    }
                   >
-                    Edit
+                    <span />
+                    <span className="sr-only">
+                      {schedule.enabled ? 'Enabled' : 'Paused'}
+                    </span>
                   </button>
                   <button
-                    onClick={() => onDelete(schedule.name)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Edit ${schedule.name}`}
+                    disabled={busy}
+                    onClick={() =>
+                      openEditor({
+                        originalName: schedule.name,
+                        draftName: null,
+                        data: toScheduleInput(schedule),
+                      })
+                    }
                   >
-                    Delete
+                    <Icon name="edit" />
                   </button>
-                </td>
-              </tr>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Delete ${schedule.name}`}
+                    disabled={busy}
+                    onClick={() => handleDelete(schedule.name)}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }
 
-function TableHeader({
-  align = 'left',
-  children,
-}: {
-  align?: 'left' | 'right';
-  children: React.ReactNode;
-}) {
-  const alignClass = align === 'right' ? 'text-right' : 'text-left';
-
-  return (
-    <th
-      className={`px-6 py-3 ${alignClass} text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400`}
-    >
-      {children}
-    </th>
-  );
+function cronDescription(expression: string) {
+  if (!expression.trim())
+    return {
+      description: 'Five fields: minute, hour, day, month, weekday.',
+      invalid: false,
+    };
+  try {
+    if (expression.trim().split(/\s+/).length !== 5)
+      throw new Error('Expected five cron fields');
+    return { description: cronstrue.toString(expression), invalid: false };
+  } catch {
+    return {
+      description: 'Enter a valid five-field cron expression.',
+      invalid: true,
+    };
+  }
 }
 
-function ActionBadge({ action }: { action: 'open' | 'close' }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        action === 'open'
-          ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
-          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-      }`}
-    >
-      {action}
-    </span>
-  );
-}
-
-function ScheduleStatus({ enabled }: { enabled: boolean }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        enabled
-          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-          : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-200'
-      }`}
-    >
-      {enabled ? 'Enabled' : 'Disabled'}
-    </span>
-  );
-}
-
-function toScheduleInput(draft: ScheduleDraft): ScheduleInput {
+function toScheduleInput(schedule: ScheduleInput): ScheduleInput {
   return {
-    name: draft.name,
-    cron_expression: draft.cron_expression,
-    action: draft.action,
-    enabled: draft.enabled,
+    name: schedule.name,
+    cron_expression: schedule.cron_expression,
+    action: schedule.action,
+    enabled: schedule.enabled,
   };
 }
 
 function formatExecution(execution: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: publicConfig.controllerTimezone,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(execution));
+  return formatInTimeZone(
+    execution,
+    publicConfig.controllerTimezone,
+    'yyyy-MM-dd EEE h:mm a',
+  );
 }

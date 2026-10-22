@@ -74,6 +74,16 @@ test("api routes enforce auth and controlled edge errors", async ({
       name: scheduleName,
     },
   });
+  const upcomingResponse = await browserJson(page, "/api/schedules/upcoming");
+  expect(upcomingResponse.status).toBe(200);
+  const scheduled = (upcomingResponse.body as Array<{ schedule: { name: string }; nextExecution: string }>).find(entry => entry.schedule.name === scheduleName);
+  expect(scheduled).toBeDefined();
+  const nextExecution = new Date(scheduled!.nextExecution);
+  expect(nextExecution.getUTCHours()).toBe(6);
+  expect(nextExecution.getUTCMinutes()).toBe(0);
+  expect(nextExecution.getUTCSeconds()).toBe(0);
+  expect(nextExecution.getUTCMilliseconds()).toBe(0);
+
   expect(
     await browserJson(page, "/api/schedules", {
       body: {

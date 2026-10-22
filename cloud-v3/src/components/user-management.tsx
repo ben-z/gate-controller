@@ -1,294 +1,326 @@
 'use client';
 
 import { useState } from 'react';
-import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
-import { User, CreateUserParams } from '@/types/user';
 import { formatInTimeZone } from 'date-fns-tz';
+import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
+import { CreateUserParams, User } from '@/types/user';
 import { publicConfig } from '@/config';
+import { Icon } from './icon';
+
+type Editor = { mode: 'create' | 'edit'; data: CreateUserParams };
+type Notice = { kind: 'error' | 'success'; message: string };
 
 export function UserManagement() {
-  const { users, isLoading, isError, mutate } = useUsers();
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingUsername, setEditingUsername] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateUserParams>({
-    username: '',
-    password: '',
-    role: 'user',
-  });
+  const { users, isError, mutate } = useUsers();
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [deletingUsername, setDeletingUsername] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      if (editingUsername) {
-        await updateUser({
-          username: editingUsername,
-          password: formData.password,
-          role: formData.role,
-        });
-      } else {
-        await createUser(formData);
-      }
-      await mutate(); // Revalidate the data
-      setIsCreating(false);
-      setEditingUsername(null);
-      setFormData({
-        username: '',
+  function openEditor(user?: User) {
+    setNotice(null);
+    setDeletingUsername(null);
+    setEditor({
+      mode: user ? 'edit' : 'create',
+      data: {
+        username: user?.username ?? '',
         password: '',
-        role: 'user',
-      });
-    } catch (error) {
-      console.error('Failed to save user:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('An unexpected error occurred while saving the user');
-      }
-    }
-  };
-
-  const handleEdit = (user: User) => {
-    setEditingUsername(user.username);
-    setFormData({
-      username: user.username,
-      password: '',
-      role: user.role,
+        role: user?.role ?? 'user',
+      },
     });
-    setIsCreating(true);
-  };
+  }
 
-  const handleDelete = async (username: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    setError(null);
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor || pending) return;
+    setPending(true);
+    setNotice(null);
+    try {
+      if (editor.mode === 'edit') {
+        await updateUser(editor.data);
+      } else {
+        await createUser(editor.data);
+      }
+      await mutate();
+      setNotice({
+        kind: 'success',
+        message: `${editor.data.username} ${editor.mode === 'edit' ? 'updated' : 'added'}.`,
+      });
+      setEditor(null);
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to save this user.',
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleDelete(username: string) {
+    if (pending) return;
+    setPending(true);
+    setNotice(null);
     try {
       await deleteUser(username);
-      await mutate(); // Revalidate the data
+      await mutate();
+      setDeletingUsername(null);
+      setNotice({ kind: 'success', message: `${username} removed.` });
     } catch (error) {
-      console.error('Failed to delete user:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('An unexpected error occurred while deleting the user');
-      }
+      setNotice({
+        kind: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to remove this user.',
+      });
+    } finally {
+      setPending(false);
     }
-  };
-
-  const handleCancel = () => {
-    setIsCreating(false);
-    setEditingUsername(null);
-    setFormData({
-      username: '',
-      password: '',
-      role: 'user',
-    });
-  };
+  }
 
   if (isError) {
     return (
-      <div className="text-center py-4 text-red-500 dark:text-red-400">
-        Error loading users. Please try again later.
-      </div>
-    );
-  }
-
-  if (isLoading && !users) {
-    return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        Loading users...
+      <div className="inline-alert" role="alert">
+        Unable to load users. Refresh to try again.
       </div>
     );
   }
 
   if (!users) {
     return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        No users available
+      <div className="card-body muted" role="status">
+        Loading users…
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">User Management</h2>
-        {!isCreating && (
-          <button
-            onClick={() => setIsCreating(true)}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Add User
-          </button>
-        )}
+    <section className="card" aria-labelledby="users-heading">
+      <div className="card-header">
+        <div>
+          <p className="eyebrow">PEOPLE & PERMISSIONS</p>
+          <h2 className="section-heading" id="users-heading">
+            User Management
+          </h2>
+          <p className="muted">Choose who can control your gate.</p>
+        </div>
+        <button
+          className="button button-primary"
+          onClick={() => openEditor()}
+          disabled={pending || editor !== null}
+        >
+          <Icon name="plus" /> Add User
+        </button>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/50 text-red-700 dark:text-red-200 rounded-lg">
-          {error}
+      {notice && (
+        <div
+          className={
+            notice.kind === 'error' ? 'inline-alert' : 'feedback-success'
+          }
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+        >
+          <Icon name={notice.kind === 'error' ? 'alert' : 'check'} />
+          {notice.message}
         </div>
       )}
 
-      {isCreating && (
-        <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-          <div>
-            <label htmlFor="user-username" className="block text-sm font-medium mb-1">Username</label>
-            <input
-              id="user-username"
-              type="text"
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              disabled={!!editingUsername}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 disabled:opacity-50"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="user-password" className="block text-sm font-medium mb-1">
-              {editingUsername ? 'New Password (leave blank to keep current)' : 'Password'}
-            </label>
-            <input
-              id="user-password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
-              required={!editingUsername}
-            />
-          </div>
-          <div>
-            <label htmlFor="user-role" className="block text-sm font-medium mb-1">Role</label>
-            <select
-              id="user-role"
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
-            >
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              {editingUsername ? 'Update' : 'Create'} User
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+      {editor && (
+        <form
+          onSubmit={handleSubmit}
+          className="editor-panel"
+          aria-labelledby="user-editor-heading"
+        >
+          <h3 className="section-heading" id="user-editor-heading">
+            {editor.mode === 'edit'
+              ? `Edit ${editor.data.username}`
+              : 'Give someone access'}
+          </h3>
+          <fieldset disabled={pending}>
+            <div className="form-grid">
+              <div>
+                <label htmlFor="user-username" className="field-label">
+                  Username
+                </label>
+                <input
+                  id="user-username"
+                  type="text"
+                  autoComplete="off"
+                  autoFocus={editor.mode === 'create'}
+                  value={editor.data.username}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: { ...editor.data, username: event.target.value },
+                    })
+                  }
+                  disabled={editor.mode === 'edit'}
+                  className="field"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="user-password" className="field-label">
+                  {editor.mode === 'edit' ? 'New password' : 'Password'}
+                </label>
+                <input
+                  id="user-password"
+                  type="password"
+                  autoComplete="new-password"
+                  autoFocus={editor.mode === 'edit'}
+                  value={editor.data.password}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: { ...editor.data, password: event.target.value },
+                    })
+                  }
+                  aria-describedby={
+                    editor.mode === 'edit' ? 'password-hint' : undefined
+                  }
+                  className="field"
+                  required={editor.mode === 'create'}
+                />
+                {editor.mode === 'edit' && (
+                  <p id="password-hint" className="field-hint">
+                    Leave blank to keep the current password.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="user-role" className="field-label">
+                  Role
+                </label>
+                <select
+                  id="user-role"
+                  value={editor.data.role}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      data: {
+                        ...editor.data,
+                        role: event.target.value as User['role'],
+                      },
+                    })
+                  }
+                  className="field"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="button button-primary">
+                {pending
+                  ? 'Saving…'
+                  : `${editor.mode === 'edit' ? 'Update' : 'Create'} User`}
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setEditor(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </fieldset>
         </form>
       )}
 
-      {users && users.length > 0 ? (
-        <>
-          <div className="space-y-3 sm:hidden">
-            {users.map((user) => (
-              <div
-                key={user.username}
-                className="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-800/50"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium">{user.username}</div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
-                    </div>
-                  </div>
-                  <RoleBadge role={user.role} />
-                </div>
-                <div className="mt-3 flex justify-end text-sm">
-                  <button
-                    onClick={() => handleEdit(user)}
-                    className="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user.username)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="access-summary">
+        <Icon name="users" />
+        <p>
+          <strong>
+            {users.length} {users.length === 1 ? 'person has' : 'people have'}{' '}
+            access.
+          </strong>{' '}
+          Users can control the gate and manage schedules. Admins can also
+          manage people and view system details.
+        </p>
+      </div>
 
-          <div className="hidden overflow-x-auto rounded-lg bg-gray-50 dark:bg-gray-800/50 sm:block">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-100 dark:bg-gray-800">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Username
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Created At
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
-                {users.map((user) => (
-                  <tr key={user.username}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {user.username}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <RoleBadge role={user.role} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {formatInTimeZone(user.created_at, publicConfig.controllerTimezone, 'yyyy-MM-dd HH:mm:ss zzz')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                      <button
-                        onClick={() => handleEdit(user)}
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-3"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.username)}
-                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {users.length > 0 ? (
+        <ul className="member-list" aria-label="Users">
+          {users.map((user) => (
+            <li key={user.username} className="member-row">
+              <div className="member-avatar" aria-hidden="true">
+                {user.username.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="member-identity">
+                <strong>{user.username}</strong>
+                <p className="member-meta">
+                  Added{' '}
+                  {formatInTimeZone(
+                    user.created_at,
+                    publicConfig.controllerTimezone,
+                    'yyyy-MM-dd',
+                  )}
+                </p>
+              </div>
+              <span
+                className={`status-pill ${user.role === 'admin' ? 'positive' : 'neutral'}`}
+              >
+                {user.role === 'admin' ? 'Admin' : 'User'}
+              </span>
+              <div className="member-actions">
+                <button
+                  className="icon-button"
+                  onClick={() => openEditor(user)}
+                  aria-label={`Edit ${user.username}`}
+                  disabled={pending}
+                >
+                  <Icon name="edit" />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => {
+                    setEditor(null);
+                    setNotice(null);
+                    setDeletingUsername(user.username);
+                  }}
+                  aria-label={`Delete ${user.username}`}
+                  disabled={pending}
+                >
+                  <Icon name="trash" />
+                </button>
+              </div>
+              {deletingUsername === user.username && (
+                <div className="delete-confirmation">
+                  <p>
+                    Remove <strong>{user.username}</strong>? They will lose
+                    access to the gate.
+                  </p>
+                  <div className="form-actions">
+                    <button
+                      className="button button-danger"
+                      onClick={() => handleDelete(user.username)}
+                      disabled={pending}
+                    >
+                      {pending ? 'Removing…' : 'Delete user'}
+                    </button>
+                    <button
+                      className="button button-secondary"
+                      onClick={() => setDeletingUsername(null)}
+                      disabled={pending}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       ) : (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          No users found. Click &quot;Add User&quot; to create one.
+        <div className="empty-state">
+          <Icon name="users" />
+          <h3>No users yet</h3>
+          <p>Add a user to give them access to your gate.</p>
         </div>
       )}
-    </div>
-  );
-}
-
-function RoleBadge({ role }: { role: User['role'] }) {
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        role === 'admin'
-          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
-          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-      }`}
-    >
-      {role}
-    </span>
+    </section>
   );
 }
