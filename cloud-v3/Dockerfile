@@ -39,7 +39,7 @@ RUN test "${#SOURCE_SHA}" -eq 40 && ! printf '%s' "$SOURCE_SHA" | grep -q '[^0-9
 ENV APP_VERSION=${SOURCE_SHA}
 
 # Build application
-RUN npx next build --experimental-build-mode compile
+RUN npm run build
 
 # Remove development dependencies
 RUN npm prune --omit=dev
