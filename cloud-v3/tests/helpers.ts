@@ -23,12 +23,8 @@ export async function browserJson(
         headers: body === undefined ? undefined : { "content-type": "application/json" },
         method,
       });
-      let responseBody: unknown = null;
-      try {
-        responseBody = await response.json();
-      } catch {
-        // 204 responses have no body.
-      }
+      const responseBody: unknown =
+        response.status === 204 ? null : await response.json();
       return { status: response.status, body: responseBody };
     },
     { requestUrl: url, body: options.body, method: options.method ?? "GET" }

@@ -14,6 +14,7 @@ import {
   useSchedules,
 } from '@/hooks/useSchedules';
 import {
+  Schedule,
   ScheduleDraft,
   ScheduleDraftProgress,
   ScheduleDraftResponse,
@@ -34,7 +35,7 @@ const PROMPT_EXAMPLES = [
 ];
 
 type Editor = {
-  originalName: string | null;
+  original: Readonly<ScheduleInput> | null;
   draftName: string | null;
   data: ScheduleInput;
 };
@@ -54,13 +55,50 @@ export function ScheduleManager() {
     useState<ScheduleDraftProgress | null>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const editorInput = useRef<HTMLInputElement>(null);
+  const reviewTitle = useRef<HTMLHeadingElement>(null);
+  const editorTrigger = useRef<HTMLButtonElement | null>(null);
+  const manualTrigger = useRef<HTMLButtonElement>(null);
   const busy = pending !== null;
+  const outsideEditorDisabled = busy || editor !== null;
 
-  async function refreshSchedules() {
-    await Promise.all([mutate(), revalidate('/api/schedules/upcoming')]);
+  if (!schedules) {
+    return (
+      <div
+        role={isError ? 'alert' : 'status'}
+        className={isError ? 'inline-alert' : 'empty-state'}
+      >
+        {isError ? 'Schedules could not be loaded.' : 'Loading schedules…'}
+        {isError && (
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => void mutate()}
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const displayedSchedules = schedules;
+
+  function refreshSchedules() {
+    // Revalidation errors remain separate from the confirmed write in SWR.
+    void mutate();
+    void revalidate('/api/schedules/upcoming');
+  }
+
+  async function showConfirmedSchedules(
+    nextSchedules: Schedule[],
+    message: string,
+  ) {
+    await mutate(nextSchedules, { revalidate: false });
+    setNotice(message);
   }
 
   async function runAction(operation: string, action: () => Promise<void>) {
+    if (busy) return;
     setPending(operation);
     setError(null);
     setNotice(null);
@@ -85,7 +123,9 @@ export function ScheduleManager() {
     });
   }
 
-  function openEditor(next: Editor) {
+  function openEditor(next: Editor, trigger: HTMLButtonElement) {
+    if (outsideEditorDisabled) return;
+    editorTrigger.current = trigger;
     setEditor(next);
     setError(null);
     requestAnimationFrame(() => {
@@ -95,8 +135,20 @@ export function ScheduleManager() {
     });
   }
 
+  function closeEditor() {
+    setEditor(null);
+    requestAnimationFrame(() => {
+      if (editorTrigger.current?.isConnected) {
+        editorTrigger.current.focus();
+      } else {
+        manualTrigger.current?.focus();
+      }
+    });
+  }
+
   function handleDraftSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (outsideEditorDisabled) return;
     void runAction('draft', async () => {
       setDraftResult(null);
       setDraftProgress({
@@ -105,6 +157,7 @@ export function ScheduleManager() {
       });
       try {
         setDraftResult(await draftSchedules(prompt.trim(), setDraftProgress));
+        requestAnimationFrame(() => reviewTitle.current?.focus());
       } finally {
         setDraftProgress(null);
       }
@@ -112,18 +165,22 @@ export function ScheduleManager() {
   }
 
   function applyDrafts(drafts: ScheduleDraft[], operation: string) {
+    if (outsideEditorDisabled) return;
     void runAction(operation, async () => {
+      let confirmedSchedules = displayedSchedules;
+      let added = 0;
       for (const draft of drafts) {
-        await createSchedule(toScheduleInput(draft));
+        const saved = await createSchedule(toScheduleInput(draft));
+        confirmedSchedules = withSavedSchedule(confirmedSchedules, saved);
         removeAppliedDraft(draft.name);
-        await refreshSchedules();
+        added += 1;
+        await showConfirmedSchedules(
+          confirmedSchedules,
+          added === 1 ? 'Schedule added.' : `${added} schedules added.`,
+        );
+        refreshSchedules();
       }
-      setNotice(
-        drafts.length === 1
-          ? 'Schedule added.'
-          : `${drafts.length} schedules added.`,
-      );
-      setPrompt('');
+      if (operation === 'apply:all') setPrompt('');
     });
   }
 
@@ -131,71 +188,49 @@ export function ScheduleManager() {
     event.preventDefault();
     if (!editor || cronDescription(editor.data.cron_expression).invalid) return;
     void runAction('save', async () => {
-      if (editor.originalName) {
-        await updateSchedule(editor.originalName, editor.data);
+      let saved: Schedule;
+      if (editor.original) {
+        const changes: Partial<Omit<ScheduleInput, 'name'>> = {};
+        if (editor.data.cron_expression !== editor.original.cron_expression) {
+          changes.cron_expression = editor.data.cron_expression;
+        }
+        if (editor.data.action !== editor.original.action) {
+          changes.action = editor.data.action;
+        }
+        if (editor.data.enabled !== editor.original.enabled) {
+          changes.enabled = editor.data.enabled;
+        }
+        saved = await updateSchedule(editor.original.name, changes);
       } else {
-        await createSchedule(editor.data);
+        saved = await createSchedule(editor.data);
       }
+      await showConfirmedSchedules(
+        withSavedSchedule(displayedSchedules, saved),
+        editor.original ? 'Schedule updated.' : 'Schedule added.',
+      );
       if (editor.draftName) removeAppliedDraft(editor.draftName);
-      setEditor(null);
-      await refreshSchedules();
-      setNotice(editor.originalName ? 'Schedule updated.' : 'Schedule added.');
+      closeEditor();
+      refreshSchedules();
     });
   }
 
   function handleDelete(name: string) {
+    if (outsideEditorDisabled) return;
     if (!confirm(`Delete schedule “${name}”?`)) return;
     void runAction(`delete:${name}`, async () => {
       await deleteSchedule(name);
-      if (editor?.originalName === name) setEditor(null);
-      await refreshSchedules();
-      setNotice('Schedule deleted.');
+      await showConfirmedSchedules(
+        displayedSchedules.filter((schedule) => schedule.name !== name),
+        'Schedule deleted.',
+      );
+      refreshSchedules();
     });
-  }
-
-  if (isError) {
-    return (
-      <div role="alert" className="inline-alert">
-        Schedules could not be loaded. Refresh the page to try again.
-      </div>
-    );
-  }
-  if (!schedules) {
-    return (
-      <div role="status" className="empty-state">
-        Loading schedules…
-      </div>
-    );
   }
 
   const cron = editor ? cronDescription(editor.data.cron_expression) : null;
 
   return (
     <div className="space-y-6">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">AUTOMATION</p>
-          <h2>Schedules</h2>
-          <p className="muted">
-            Set recurring times to open and close your gate.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="button button-secondary"
-          disabled={busy || editor !== null}
-          onClick={() =>
-            openEditor({
-              originalName: null,
-              draftName: null,
-              data: EMPTY_SCHEDULE,
-            })
-          }
-        >
-          <Icon name="plus" /> Add Schedule
-        </button>
-      </div>
-
       {error && (
         <div role="alert" className="inline-alert">
           <Icon name="alert" />
@@ -208,16 +243,32 @@ export function ScheduleManager() {
           {notice}
         </p>
       )}
+      {isError && (
+        <div role="alert" className="inline-alert">
+          <Icon name="alert" />
+          <p className="min-w-0 flex-1">
+            Schedules could not be refreshed. Showing cached schedules.
+          </p>
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={busy}
+            onClick={refreshSchedules}
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
       {editor && (
         <section className="card" aria-labelledby="schedule-editor-title">
           <div className="card-header">
             <div>
-              <h3 id="schedule-editor-title">
-                {editor.originalName
+              <h2 id="schedule-editor-title" className="section-heading">
+                {editor.original
                   ? 'Edit schedule'
                   : 'Add a schedule manually'}
-              </h3>
+              </h2>
               <p className="muted">
                 Times use {publicConfig.controllerTimezone}.
               </p>
@@ -227,7 +278,7 @@ export function ScheduleManager() {
               className="icon-button"
               aria-label="Close schedule editor"
               disabled={busy}
-              onClick={() => setEditor(null)}
+              onClick={closeEditor}
             >
               <Icon name="close" />
             </button>
@@ -239,11 +290,11 @@ export function ScheduleManager() {
                   Name
                 </label>
                 <input
-                  ref={editor.originalName ? undefined : editorInput}
+                  ref={editor.original ? undefined : editorInput}
                   id="schedule-name"
                   className="field"
                   value={editor.data.name}
-                  disabled={editor.originalName !== null}
+                  disabled={editor.original !== null}
                   onChange={(event) =>
                     setEditor({
                       ...editor,
@@ -281,7 +332,7 @@ export function ScheduleManager() {
                   Cron Expression
                 </label>
                 <input
-                  ref={editor.originalName ? editorInput : undefined}
+                  ref={editor.original ? editorInput : undefined}
                   id="schedule-cron"
                   className="field font-mono"
                   value={editor.data.cron_expression}
@@ -333,12 +384,12 @@ export function ScheduleManager() {
                 >
                   {pending === 'save'
                     ? 'Saving…'
-                    : `${editor.originalName ? 'Update' : 'Create'} Schedule`}
+                    : `${editor.original ? 'Update' : 'Create'} Schedule`}
                 </button>
                 <button
                   type="button"
                   className="button button-ghost"
-                  onClick={() => setEditor(null)}
+                  onClick={closeEditor}
                 >
                   Cancel
                 </button>
@@ -353,17 +404,33 @@ export function ScheduleManager() {
         aria-labelledby="schedule-compose-title"
       >
         <form onSubmit={handleDraftSubmit} className="card-body space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="schedule-icon">
-              <Icon name="sparkle" />
-            </span>
-            <div>
-              <h3 id="schedule-compose-title">Tell us your routine</h3>
-              <p className="muted">
-                Describe it in your own words. Review the times before adding
-                them.
-              </p>
+          <div className="schedule-compose-heading">
+            <div className="schedule-compose-copy flex items-start gap-3">
+              <span className="schedule-icon">
+                <Icon name="sparkle" />
+              </span>
+              <div className="min-w-0">
+                <h2 id="schedule-compose-title" className="section-heading">Tell us your routine</h2>
+                <p className="muted">
+                  Describe it in your own words. Review the times before adding
+                  them.
+                </p>
+              </div>
             </div>
+            <button
+              ref={manualTrigger}
+              type="button"
+              className="button button-secondary"
+              disabled={outsideEditorDisabled}
+              onClick={(event) =>
+                openEditor(
+                  { original: null, draftName: null, data: EMPTY_SCHEDULE },
+                  event.currentTarget,
+                )
+              }
+            >
+              Add manually
+            </button>
           </div>
           <div>
             <label htmlFor="schedule-prompt" className="field-label">
@@ -377,25 +444,30 @@ export function ScheduleManager() {
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="Open on weekdays at 7:30 AM and close at 6 PM…"
               rows={3}
-              disabled={busy}
+              disabled={outsideEditorDisabled}
               aria-describedby="schedule-timezone"
               required
             />
           </div>
-          <div className="prompt-examples">
+          <p id="schedule-examples-hint" className="field-hint">
+            Choose an example to replace your description.
+          </p>
+          <div
+            className="prompt-examples"
+            aria-describedby="schedule-examples-hint"
+          >
             {PROMPT_EXAMPLES.map((example) => (
               <button
                 key={example}
                 type="button"
                 className="prompt-example"
-                disabled={busy}
+                disabled={outsideEditorDisabled}
                 onClick={() => {
                   setPrompt(example);
                   promptInput.current?.focus();
                 }}
               >
                 {example}
-                <Icon name="plus" />
               </button>
             ))}
           </div>
@@ -407,7 +479,7 @@ export function ScheduleManager() {
             <button
               type="submit"
               className="button button-primary"
-              disabled={busy || !prompt.trim()}
+              disabled={outsideEditorDisabled || !prompt.trim()}
             >
               <Icon name="sparkle" />
               {pending === 'draft' ? 'Drafting…' : 'Draft'}
@@ -434,14 +506,21 @@ export function ScheduleManager() {
           <div className="card-header">
             <div>
               <p className="eyebrow">READY TO REVIEW</p>
-              <h3 id="draft-review-title">Review Drafts</h3>
+              <h2
+                id="draft-review-title"
+                className="section-heading"
+                ref={reviewTitle}
+                tabIndex={-1}
+              >
+                Review Drafts
+              </h2>
               <p className="muted">{draftResult.interpretation}</p>
             </div>
             <div className="row-actions">
               <button
                 type="button"
                 className="button button-ghost"
-                disabled={busy}
+                disabled={outsideEditorDisabled}
                 onClick={() => setDraftResult(null)}
               >
                 Dismiss
@@ -450,7 +529,7 @@ export function ScheduleManager() {
                 <button
                   type="button"
                   className="button button-primary"
-                  disabled={busy}
+                  disabled={outsideEditorDisabled}
                   onClick={() => applyDrafts(draftResult.drafts, 'apply:all')}
                 >
                   {pending === 'apply:all' ? 'Applying…' : 'Apply All'}
@@ -477,18 +556,29 @@ export function ScheduleManager() {
               {draftResult.drafts.map((draft) => (
                 <article key={draft.name} className="draft-card">
                   <div className="flex items-start justify-between gap-3">
-                    <h4>{draft.name}</h4>
+                    <h3>{draft.name}</h3>
                     <span className="status-pill neutral">
                       {draft.action === 'open' ? 'Open' : 'Close'} gate
                     </span>
                   </div>
-                  <p className="muted mt-2">
-                    {draft.summary || draft.description}
+                  <p className="muted mt-2">{draft.description}</p>
+                  <p className="field-hint mt-3">
+                    Saves as{' '}
+                    <span
+                      className={`status-pill ${draft.enabled ? 'positive' : 'neutral'}`}
+                    >
+                      {draft.enabled ? 'Enabled' : 'Paused'}
+                    </span>
                   </p>
                   <p className="field-hint mt-3 font-mono">
                     {draft.cron_expression}
                   </p>
-                  <ul className="space-y-1 mt-3 text-sm">
+                  <p className="field-hint mt-3">
+                    {draft.enabled
+                      ? 'Next scheduled times'
+                      : 'Next times if enabled'}
+                  </p>
+                  <ul className="space-y-1 mt-1 text-sm">
                     {draft.nextExecutions.slice(0, 3).map((execution) => (
                       <li key={execution}>{formatExecution(execution)}</li>
                     ))}
@@ -497,7 +587,7 @@ export function ScheduleManager() {
                     <button
                       type="button"
                       className="button button-primary"
-                      disabled={busy}
+                      disabled={outsideEditorDisabled}
                       onClick={() =>
                         applyDrafts([draft], `apply:${draft.name}`)
                       }
@@ -509,13 +599,16 @@ export function ScheduleManager() {
                     <button
                       type="button"
                       className="button button-secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        openEditor({
-                          originalName: null,
-                          draftName: draft.name,
-                          data: toScheduleInput(draft),
-                        })
+                      disabled={outsideEditorDisabled}
+                      onClick={(event) =>
+                        openEditor(
+                          {
+                            original: null,
+                            draftName: draft.name,
+                            data: toScheduleInput(draft),
+                          },
+                          event.currentTarget,
+                        )
                       }
                     >
                       Edit
@@ -536,9 +629,9 @@ export function ScheduleManager() {
       <section className="card" aria-labelledby="saved-schedules-title">
         <div className="card-header">
           <div>
-            <h3 id="saved-schedules-title">
+            <h2 id="saved-schedules-title" className="section-heading">
               Your schedules <span className="muted">({schedules.length})</span>
-            </h3>
+            </h2>
             <p className="muted">
               {schedules.filter((schedule) => schedule.enabled).length} active ·{' '}
               {publicConfig.controllerTimezone}
@@ -549,7 +642,7 @@ export function ScheduleManager() {
         {schedules.length === 0 ? (
           <div className="empty-state">
             <Icon name="calendar" />
-            <h4>Your routine starts here</h4>
+            <h3>Your routine starts here</h3>
             <p>
               Describe when your gate should open or close to add your first
               schedule.
@@ -569,7 +662,7 @@ export function ScheduleManager() {
                   />
                 </span>
                 <div className="schedule-copy">
-                  <h4>{schedule.name}</h4>
+                  <h3>{schedule.name}</h3>
                   <p className="muted">
                     {schedule.action === 'open' ? 'Open' : 'Close'} gate ·{' '}
                     {cronDescription(schedule.cron_expression).description}
@@ -579,42 +672,49 @@ export function ScheduleManager() {
                   </p>
                 </div>
                 <div className="row-actions">
+                  <span
+                    className={`status-pill ${schedule.enabled ? 'positive' : 'neutral'}`}
+                  >
+                    {schedule.enabled ? 'Enabled' : 'Paused'}
+                  </span>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={schedule.enabled}
                     aria-label={`Enable ${schedule.name}`}
                     className="schedule-switch"
-                    disabled={busy}
+                    disabled={outsideEditorDisabled}
                     onClick={() =>
                       void runAction(`toggle:${schedule.name}`, async () => {
-                        await updateSchedule(schedule.name, {
+                        const saved = await updateSchedule(schedule.name, {
                           enabled: !schedule.enabled,
                         });
-                        await refreshSchedules();
-                        setNotice(
+                        await showConfirmedSchedules(
+                          withSavedSchedule(displayedSchedules, saved),
                           `${schedule.name} ${schedule.enabled ? 'paused' : 'enabled'}.`,
                         );
+                        refreshSchedules();
                       })
                     }
                   >
                     <span />
-                    <span className="sr-only">
-                      {schedule.enabled ? 'Enabled' : 'Paused'}
-                    </span>
                   </button>
                   <button
                     type="button"
                     className="icon-button"
                     aria-label={`Edit ${schedule.name}`}
-                    disabled={busy}
-                    onClick={() =>
-                      openEditor({
-                        originalName: schedule.name,
-                        draftName: null,
-                        data: toScheduleInput(schedule),
-                      })
-                    }
+                    disabled={outsideEditorDisabled}
+                    onClick={(event) => {
+                      const original = Object.freeze(toScheduleInput(schedule));
+                      openEditor(
+                        {
+                          original,
+                          draftName: null,
+                          data: original,
+                        },
+                        event.currentTarget,
+                      );
+                    }}
                   >
                     <Icon name="edit" />
                   </button>
@@ -622,7 +722,7 @@ export function ScheduleManager() {
                     type="button"
                     className="icon-button"
                     aria-label={`Delete ${schedule.name}`}
-                    disabled={busy}
+                    disabled={outsideEditorDisabled}
                     onClick={() => handleDelete(schedule.name)}
                   >
                     <Icon name="trash" />
@@ -635,6 +735,15 @@ export function ScheduleManager() {
       </section>
     </div>
   );
+}
+
+function withSavedSchedule(schedules: Schedule[], saved: Schedule): Schedule[] {
+  if (schedules.some((schedule) => schedule.name === saved.name)) {
+    return schedules.map((schedule) =>
+      schedule.name === saved.name ? saved : schedule,
+    );
+  }
+  return [saved, ...schedules];
 }
 
 function cronDescription(expression: string) {

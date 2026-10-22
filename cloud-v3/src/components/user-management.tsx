@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
-import { CreateUserParams, User } from '@/types/user';
+import { CreateUserParams, UpdateUserParams, User } from '@/types/user';
 import { publicConfig } from '@/config';
 import { Icon } from './icon';
 
-type Editor = { mode: 'create' | 'edit'; data: CreateUserParams };
+type Editor = { original: User | null; data: CreateUserParams };
 type Notice = { kind: 'error' | 'success'; message: string };
 
 export function UserManagement() {
@@ -17,11 +17,20 @@ export function UserManagement() {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  function openEditor(user?: User) {
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const locked =
+    pending || editor !== null || deletingUsername !== null || !!isError;
+
+  function restoreFocus() {
+    requestAnimationFrame(() => trigger.current?.focus());
+  }
+
+  function openEditor(user: User | undefined, button: HTMLButtonElement) {
+    trigger.current = button;
     setNotice(null);
-    setDeletingUsername(null);
     setEditor({
-      mode: user ? 'edit' : 'create',
+      original: user ?? null,
       data: {
         username: user?.username ?? '',
         password: '',
@@ -30,31 +39,65 @@ export function UserManagement() {
     });
   }
 
+  function cancelEditor() {
+    setEditor(null);
+    restoreFocus();
+  }
+
+  function cancelDelete() {
+    setDeletingUsername(null);
+    restoreFocus();
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editor || pending) return;
     setPending(true);
     setNotice(null);
+    let saved = false;
     try {
-      if (editor.mode === 'edit') {
-        await updateUser(editor.data);
+      if (!users)
+        throw new Error('Users must be loaded before access can be changed.');
+      if (editor.original) {
+        const changes: UpdateUserParams = {
+          username: editor.original.username,
+        };
+        if (editor.data.password) changes.password = editor.data.password;
+        if (editor.data.role !== editor.original.role)
+          changes.role = editor.data.role;
+        await updateUser(changes);
+        saved = true;
+        await mutate(
+          users.map((user) =>
+            user.username === changes.username && changes.role !== undefined
+              ? { ...user, role: changes.role }
+              : user,
+          ),
+          { revalidate: false },
+        );
       } else {
-        await createUser(editor.data);
+        const created: User = await createUser(editor.data);
+        saved = true;
+        await mutate([...users, created], { revalidate: false });
       }
-      await mutate();
       setNotice({
         kind: 'success',
-        message: `${editor.data.username} ${editor.mode === 'edit' ? 'updated' : 'added'}.`,
+        message: `${editor.data.username} ${editor.original ? 'updated' : 'added'}.`,
       });
       setEditor(null);
+      await mutate();
     } catch (error) {
+      const failureMessage =
+        error instanceof Error ? error.message : 'Unable to save this user.';
       setNotice({
         kind: 'error',
-        message:
-          error instanceof Error ? error.message : 'Unable to save this user.',
+        message: saved
+          ? `${editor.data.username} was saved, but the people list could not be refreshed.`
+          : failureMessage,
       });
     } finally {
       setPending(false);
+      if (saved) restoreFocus();
     }
   }
 
@@ -62,36 +105,46 @@ export function UserManagement() {
     if (pending) return;
     setPending(true);
     setNotice(null);
+    let saved = false;
     try {
+      if (!users)
+        throw new Error('Users must be loaded before access can be changed.');
       await deleteUser(username);
-      await mutate();
+      saved = true;
+      await mutate(
+        users.filter((user) => user.username !== username),
+        { revalidate: false },
+      );
       setDeletingUsername(null);
       setNotice({ kind: 'success', message: `${username} removed.` });
+      await mutate();
     } catch (error) {
+      const failureMessage =
+        error instanceof Error ? error.message : 'Unable to remove this user.';
       setNotice({
         kind: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to remove this user.',
+        message: saved
+          ? `${username} was removed, but the people list could not be refreshed.`
+          : failureMessage,
       });
     } finally {
       setPending(false);
+      if (saved) requestAnimationFrame(() => addButton.current?.focus());
     }
-  }
-
-  if (isError) {
-    return (
-      <div className="inline-alert" role="alert">
-        Unable to load users. Refresh to try again.
-      </div>
-    );
   }
 
   if (!users) {
     return (
-      <div className="card-body muted" role="status">
-        Loading users…
+      <div
+        className={isError ? 'inline-alert' : 'empty-state'}
+        role={isError ? 'alert' : 'status'}
+      >
+        {isError ? 'Unable to load users.' : 'Loading users…'}
+        {isError && (
+          <button className="button button-secondary" onClick={() => mutate()}>
+            Try again
+          </button>
+        )}
       </div>
     );
   }
@@ -108,12 +161,23 @@ export function UserManagement() {
         </div>
         <button
           className="button button-primary"
-          onClick={() => openEditor()}
-          disabled={pending || editor !== null}
+          ref={addButton}
+          onClick={(event) => openEditor(undefined, event.currentTarget)}
+          disabled={locked}
         >
           <Icon name="plus" /> Add User
         </button>
       </div>
+
+      {isError && (
+        <div className="inline-alert" role="alert">
+          The people list could not be refreshed. Saved changes are shown;
+          reload the list before making another change.
+          <button className="button button-secondary" onClick={() => mutate()}>
+            Try again
+          </button>
+        </div>
+      )}
 
       {notice && (
         <div
@@ -134,7 +198,7 @@ export function UserManagement() {
           aria-labelledby="user-editor-heading"
         >
           <h3 className="section-heading" id="user-editor-heading">
-            {editor.mode === 'edit'
+            {editor.original
               ? `Edit ${editor.data.username}`
               : 'Give someone access'}
           </h3>
@@ -148,7 +212,7 @@ export function UserManagement() {
                   id="user-username"
                   type="text"
                   autoComplete="off"
-                  autoFocus={editor.mode === 'create'}
+                  autoFocus={!editor.original}
                   value={editor.data.username}
                   onChange={(event) =>
                     setEditor({
@@ -156,20 +220,20 @@ export function UserManagement() {
                       data: { ...editor.data, username: event.target.value },
                     })
                   }
-                  disabled={editor.mode === 'edit'}
+                  disabled={!!editor.original}
                   className="field"
                   required
                 />
               </div>
               <div>
                 <label htmlFor="user-password" className="field-label">
-                  {editor.mode === 'edit' ? 'New password' : 'Password'}
+                  {editor.original ? 'New password' : 'Password'}
                 </label>
                 <input
                   id="user-password"
                   type="password"
                   autoComplete="new-password"
-                  autoFocus={editor.mode === 'edit'}
+                  autoFocus={!!editor.original}
                   value={editor.data.password}
                   onChange={(event) =>
                     setEditor({
@@ -178,12 +242,12 @@ export function UserManagement() {
                     })
                   }
                   aria-describedby={
-                    editor.mode === 'edit' ? 'password-hint' : undefined
+                    editor.original ? 'password-hint' : undefined
                   }
                   className="field"
-                  required={editor.mode === 'create'}
+                  required={!editor.original}
                 />
-                {editor.mode === 'edit' && (
+                {editor.original && (
                   <p id="password-hint" className="field-hint">
                     Leave blank to keep the current password.
                   </p>
@@ -213,15 +277,19 @@ export function UserManagement() {
               </div>
             </div>
             <div className="form-actions">
-              <button type="submit" className="button button-primary">
+              <button
+                type="submit"
+                className="button button-primary"
+                disabled={!!isError}
+              >
                 {pending
                   ? 'Saving…'
-                  : `${editor.mode === 'edit' ? 'Update' : 'Create'} User`}
+                  : `${editor.original ? 'Update' : 'Create'} User`}
               </button>
               <button
                 type="button"
                 className="button button-secondary"
-                onClick={() => setEditor(null)}
+                onClick={cancelEditor}
               >
                 Cancel
               </button>
@@ -268,21 +336,21 @@ export function UserManagement() {
               <div className="member-actions">
                 <button
                   className="icon-button"
-                  onClick={() => openEditor(user)}
+                  onClick={(event) => openEditor(user, event.currentTarget)}
                   aria-label={`Edit ${user.username}`}
-                  disabled={pending}
+                  disabled={locked}
                 >
                   <Icon name="edit" />
                 </button>
                 <button
                   className="icon-button"
-                  onClick={() => {
-                    setEditor(null);
+                  onClick={(event) => {
+                    trigger.current = event.currentTarget;
                     setNotice(null);
                     setDeletingUsername(user.username);
                   }}
                   aria-label={`Delete ${user.username}`}
-                  disabled={pending}
+                  disabled={locked}
                 >
                   <Icon name="trash" />
                 </button>
@@ -303,7 +371,7 @@ export function UserManagement() {
                     </button>
                     <button
                       className="button button-secondary"
-                      onClick={() => setDeletingUsername(null)}
+                      onClick={cancelDelete}
                       disabled={pending}
                     >
                       Cancel

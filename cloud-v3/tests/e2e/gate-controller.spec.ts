@@ -16,6 +16,7 @@ async function openView(
     .getByRole('link', { name, exact: true });
   await link.click();
   await expect(link).toHaveAttribute('aria-current', 'page');
+  await expect(page).toHaveTitle(new RegExp(`${name}.*Gate Controller`));
 }
 
 function savedSchedule(page: Page, name: string) {
@@ -70,7 +71,7 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
 
   const scheduleName = 'e2e weekday open';
   await openView(page, 'Schedules');
-  await page.getByRole('button', { name: 'Add Schedule' }).click();
+  await page.getByRole('button', { name: 'Add manually', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill(scheduleName);
   await page.getByLabel('Cron Expression').fill('0 8 * * 1-5');
   await page.getByLabel('Action', { exact: true }).selectOption('open');
@@ -111,9 +112,20 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
     .getByRole('button', { name: `Edit ${scheduleName}`, exact: true })
     .click();
   await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Cron Expression')).toBeFocused();
+  await expect(enabled).toBeDisabled();
+  await expect(
+    schedule.getByRole('button', {
+      name: `Delete ${scheduleName}`,
+      exact: true,
+    }),
+  ).toBeDisabled();
   await page.getByLabel('Cron Expression').fill('0 9 * * 1-5');
   await page.getByRole('button', { name: 'Update Schedule' }).click();
   await expect(schedule).toContainText('09:00 AM');
+  await expect(
+    schedule.getByRole('button', { name: `Edit ${scheduleName}`, exact: true }),
+  ).toBeFocused();
   await expect(enabled).toHaveAttribute('aria-checked', 'false');
   await enabled.click();
   await expect(enabled).toHaveAttribute('aria-checked', 'true');
@@ -124,6 +136,12 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await page.getByRole('button', { name: 'Add User' }).click();
   await page.getByLabel('Username', { exact: true }).fill(username);
   await page.getByLabel('Password', { exact: true }).fill(password);
+  await expect(
+    page.getByRole('button', { name: 'Edit admin', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Delete admin', exact: true }),
+  ).toBeDisabled();
   await page.getByLabel('Role', { exact: true }).selectOption('user');
   await page.getByRole('button', { name: 'Create User' }).click();
   await expect(
@@ -138,6 +156,9 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await expect(page.getByLabel('Username', { exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Update User' }).click();
   await expect(page.getByRole('status')).toContainText(`${username} updated`);
+  await expect(
+    page.getByRole('button', { name: `Edit ${username}`, exact: true }),
+  ).toBeFocused();
 
   const userContext = await browser.newContext();
   const userPage = await userContext.newPage();
@@ -171,7 +192,13 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await page
     .getByRole('button', { name: `Delete ${username}`, exact: true })
     .click();
+  await expect(
+    page.getByRole('button', { name: 'Edit admin', exact: true }),
+  ).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: `Delete ${username}`, exact: true }),
+  ).toBeFocused();
   await expect(
     page
       .getByRole('list', { name: 'Users' })
@@ -186,6 +213,9 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
       .getByRole('list', { name: 'Users' })
       .getByText(username, { exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add User', exact: true }),
+  ).toBeFocused();
 
   await openView(page, 'Schedules');
   page.once('dialog', (dialog) => dialog.accept());
@@ -209,7 +239,9 @@ test('sign-in errors allow another attempt and sign-out ends the session', async
     'Invalid username or password',
   );
   await expect(page).toHaveURL(/\/login$/);
-  await page.getByLabel('Username', { exact: true }).fill(admin.username);
+  await expect(page.getByLabel('Username', { exact: true })).toHaveValue(
+    admin.username,
+  );
   await page.getByLabel('Password', { exact: true }).fill(admin.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -218,6 +250,138 @@ test('sign-in errors allow another attempt and sign-out ends the session', async
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/dashboard?view=schedules');
   await expect(page).toHaveURL(/\/login$/);
+});
+
+test('field edits preserve changes made in another session', async ({
+  browser,
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const suffix = Date.now().toString(36);
+  const scheduleName = `e2e concurrent schedule ${suffix}`;
+  const username = `e2e-concurrent-user-${suffix}`;
+  const password = 'updated-concurrent-password';
+  const scheduleUrl = `/api/schedules?name=${encodeURIComponent(scheduleName)}`;
+  const userUrl = `/api/users?username=${encodeURIComponent(username)}`;
+  const otherContext = await browser.newContext();
+  const otherPage = await otherContext.newPage();
+  let scheduleCreated = false;
+  let userCreated = false;
+
+  try {
+    const createdSchedule = await browserJson(page, '/api/schedules', {
+      method: 'POST',
+      body: {
+        name: scheduleName,
+        cron_expression: '0 7 * * 1',
+        action: 'open',
+        enabled: true,
+      },
+    });
+    scheduleCreated = createdSchedule.status === 200;
+    expect(createdSchedule.status).toBe(200);
+    const createdUser = await browserJson(page, '/api/users', {
+      method: 'POST',
+      body: {
+        username,
+        password: 'original-concurrent-password',
+        role: 'admin',
+      },
+    });
+    userCreated = createdUser.status === 200;
+    expect(createdUser.status).toBe(200);
+    await login(otherPage, admin.username, admin.password);
+
+    await page.goto('/dashboard?view=schedules');
+    const schedule = savedSchedule(page, scheduleName);
+    await schedule
+      .getByRole('button', { name: `Edit ${scheduleName}`, exact: true })
+      .click();
+    await expect(
+      page.getByLabel('Enable this schedule', { exact: true }),
+    ).toBeChecked();
+    await page.getByLabel('Cron Expression').fill('0 8 * * 1');
+    const paused = await browserJson(otherPage, scheduleUrl, {
+      method: 'PUT',
+      body: { enabled: false },
+    });
+    expect(paused.status).toBe(200);
+    expect(paused.body).toMatchObject({ name: scheduleName, enabled: false });
+
+    const scheduleRequest = page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        new URL(request.url()).pathname === '/api/schedules' &&
+        new URL(request.url()).searchParams.get('name') === scheduleName,
+    );
+    await page
+      .getByRole('button', { name: 'Update Schedule', exact: true })
+      .click();
+    expect((await scheduleRequest).postDataJSON()).toEqual({
+      cron_expression: '0 8 * * 1',
+    });
+    await expect(page.getByRole('status')).toContainText('Schedule updated');
+    const schedules = await browserJson(page, '/api/schedules');
+    expect(schedules.status).toBe(200);
+    expect(schedules.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: scheduleName,
+          cron_expression: '0 8 * * 1',
+          enabled: false,
+        }),
+      ]),
+    );
+    await expect(
+      schedule.getByRole('switch', { name: `Enable ${scheduleName}` }),
+    ).toHaveAttribute('aria-checked', 'false');
+
+    await page.goto('/dashboard?view=access');
+    await page
+      .getByRole('button', { name: `Edit ${username}`, exact: true })
+      .click();
+    await expect(page.getByLabel('Role', { exact: true })).toHaveValue('admin');
+    await page.getByLabel('New password', { exact: true }).fill(password);
+    expect(
+      await browserJson(otherPage, '/api/users', {
+        method: 'PUT',
+        body: { username, role: 'user' },
+      }),
+    ).toEqual({ status: 200, body: { success: true } });
+
+    const userRequest = page.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        new URL(request.url()).pathname === '/api/users',
+    );
+    await page
+      .getByRole('button', { name: 'Update User', exact: true })
+      .click();
+    expect((await userRequest).postDataJSON()).toEqual({ username, password });
+    await expect(page.getByRole('status')).toContainText(`${username} updated`);
+    const users = await browserJson(page, '/api/users');
+    expect(users.status).toBe(200);
+    expect(users.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username, role: 'user' }),
+      ]),
+    );
+    await login(otherPage, username, password);
+    expect((await browserJson(otherPage, '/api/users')).status).toBe(403);
+  } finally {
+    await otherContext.close();
+    if (userCreated) {
+      expect(await browserJson(page, userUrl, { method: 'DELETE' })).toEqual({
+        status: 204,
+        body: null,
+      });
+    }
+    if (scheduleCreated) {
+      expect(
+        await browserJson(page, scheduleUrl, { method: 'DELETE' }),
+      ).toEqual({ status: 204, body: null });
+    }
+  }
 });
 
 test('views support browser history, direct links, and narrow screens', async ({
@@ -245,13 +409,21 @@ test('views support browser history, direct links, and narrow screens', async ({
       ] as const) {
         await openView(page, view);
         await expectNoHorizontalOverflow(page);
+        await expect(
+          page.getByRole('banner').getByText(admin.username, { exact: true }),
+        ).toBeVisible();
         if (view === 'Schedules') {
-          await page.getByRole('button', { name: 'Add Schedule' }).click();
+          await page
+            .getByRole('button', { name: 'Add manually', exact: true })
+            .click();
           await expect(page.getByLabel('Cron Expression')).toBeVisible();
           await expectNoHorizontalOverflow(page);
           await page
             .getByRole('button', { name: 'Cancel', exact: true })
             .click();
+          await expect(
+            page.getByRole('button', { name: 'Add manually', exact: true }),
+          ).toBeFocused();
         }
         if (view === 'Access') {
           await page.getByRole('button', { name: 'Add User' }).click();
@@ -262,6 +434,9 @@ test('views support browser history, direct links, and narrow screens', async ({
           await page
             .getByRole('button', { name: 'Cancel', exact: true })
             .click();
+          await expect(
+            page.getByRole('button', { name: 'Add User', exact: true }),
+          ).toBeFocused();
         }
       }
     }
@@ -356,8 +531,8 @@ test('draft review preserves unapplied schedules after a save error', async ({
     cron_expression: '0 7 * * 1-5',
     action: 'open',
     enabled: true,
-    description: 'Open at 7 AM on weekdays.',
-    summary: 'Weekday mornings at 7 AM',
+    description: 'At 07:00 AM, Monday through Friday',
+    summary: 'Close every day at midnight',
     nextExecutions: ['2027-01-04T07:00:00.000Z'],
   };
   await page.route('**/api/schedules/draft/stream', (route) =>
@@ -379,10 +554,36 @@ test('draft review preserves unapplied schedules after a save error', async ({
   await page.getByRole('button', { name: 'Draft', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Review Drafts' }),
-  ).toBeVisible();
+  ).toBeFocused();
   expect((await browserJson(page, '/api/schedules')).body).not.toEqual(
     expect.arrayContaining([expect.objectContaining({ name })]),
   );
+
+  const review = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(
+    review.getByText(draft.description, { exact: true }),
+  ).toBeVisible();
+  await expect(review.getByText(draft.summary, { exact: true })).toHaveCount(0);
+  await expect(review.getByText('Enabled', { exact: true })).toBeVisible();
+  await expect(
+    review.getByText('Next scheduled times', { exact: true }),
+  ).toBeVisible();
+  const editDraft = review.getByRole('button', { name: 'Edit', exact: true });
+  await editDraft.click();
+  await page.getByLabel('Cron Expression').fill('0 8 * * 1-5');
+  await expect(
+    page.getByRole('button', { name: 'Apply All', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    review.getByRole('button', { name: 'Apply', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editDraft).toBeFocused();
+  await expect(
+    page.getByRole('button', { name: 'Apply All', exact: true }),
+  ).toBeEnabled();
 
   const rejectSave = (route: Route) =>
     route.request().method() === 'POST'
@@ -418,6 +619,350 @@ test('draft review preserves unapplied schedules after a save error', async ({
       method: 'DELETE',
     }),
   ).toEqual({ status: 204, body: null });
+});
+
+test('gate commands fit the initial viewport and remain readable with text spacing', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await login(page, admin.username, admin.password);
+
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 390, height: 667 },
+    { width: 320, height: 568 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    for (const name of ['Open Gate', 'Close Gate']) {
+      await expect(
+        page.getByRole('button', { name, exact: true }),
+      ).toBeInViewport({ ratio: 1 });
+    }
+  }
+
+  await page.addStyleTag({
+    content: `
+    * { letter-spacing: .12em !important; word-spacing: .16em !important; line-height: 1.5 !important; }
+    p { margin-bottom: 2em !important; }
+  `,
+  });
+  await expectNoHorizontalOverflow(page);
+  for (const name of ['Open Gate', 'Close Gate']) {
+    const bounds = await page
+      .getByRole('button', { name, exact: true })
+      .evaluate((element) => {
+        const button = element.getBoundingClientRect();
+        const region = element.closest('section');
+        if (!region) throw new Error('Gate command has no containing region');
+        const card = region.getBoundingClientRect();
+        return {
+          left: button.left,
+          right: button.right,
+          cardLeft: card.left,
+          cardRight: card.right,
+          viewportWidth: innerWidth,
+          contentWidth: element.scrollWidth,
+          availableWidth: element.clientWidth,
+        };
+      });
+    expect(bounds.left).toBeGreaterThanOrEqual(bounds.cardLeft);
+    expect(bounds.right).toBeLessThanOrEqual(
+      Math.min(bounds.cardRight, bounds.viewportWidth),
+    );
+    expect(bounds.contentWidth).toBeLessThanOrEqual(bounds.availableWidth);
+  }
+});
+
+test('a confirmed gate command stays visible when the status refresh fails', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const before = await browserJson(page, '/api/gate');
+  expect(before.status).toBe(200);
+  const { status } = before.body as { status: 'open' | 'closed' };
+  const action = status === 'open' ? 'close' : 'open';
+  const label = action === 'open' ? 'Open' : 'Close';
+  const historyUrl = (url: URL) =>
+    url.pathname === '/api/gate' && url.searchParams.get('history') === 'true';
+  await page.route(historyUrl, (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Status refresh unavailable' }),
+    }),
+  );
+  try {
+    const refreshFailed = page.waitForResponse(
+      (response) =>
+        historyUrl(new URL(response.url())) && response.status() === 503,
+    );
+    await page
+      .getByRole('button', { name: `${label} Gate`, exact: true })
+      .click();
+    await refreshFailed;
+    await expect(page.getByRole('status')).toContainText(
+      `${label} command saved`,
+    );
+    await expect(page.locator('.gate-state')).toContainText(
+      action === 'open' ? 'Open' : 'Closed',
+    );
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('alert')
+        .filter({ hasText: /refresh|connection/i })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Open Gate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Close Gate', exact: true }),
+    ).toBeDisabled();
+    const persisted = await browserJson(page, '/api/gate');
+    expect(persisted.status).toBe(200);
+    expect(persisted.body).toMatchObject({
+      status: action === 'open' ? 'open' : 'closed',
+    });
+  } finally {
+    await page.unroute(historyUrl);
+    expect(
+      await browserJson(page, '/api/gate', {
+        method: 'POST',
+        body: { action: status === 'open' ? 'open' : 'close' },
+      }),
+    ).toMatchObject({ status: 200 });
+  }
+});
+
+test('confirmed schedule and user saves survive a failed list refresh', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const scheduleName = 'e2e saved schedule refresh failure';
+  const username = 'e2e-saved-user-refresh-failure';
+  const rejectRead = (route: Route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'List refresh unavailable' }),
+        })
+      : route.continue();
+
+  await openView(page, 'Schedules');
+  await page.getByRole('button', { name: 'Add manually', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill(scheduleName);
+  await page.getByLabel('Cron Expression').fill('0 7 * * 1');
+  await page.route('**/api/schedules', rejectRead);
+  const scheduleRefreshFailed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/schedules' &&
+      response.request().method() === 'GET' &&
+      response.status() === 503,
+  );
+  await page
+    .getByRole('button', { name: 'Create Schedule', exact: true })
+    .click();
+  await scheduleRefreshFailed;
+  await expect(page.getByRole('status')).toContainText('Schedule added');
+  await expect(savedSchedule(page, scheduleName)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create Schedule', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('alert')
+      .filter({ hasText: /refresh/i })
+      .first(),
+  ).toBeVisible();
+  await page.unroute('**/api/schedules', rejectRead);
+  const schedules = await browserJson(page, '/api/schedules');
+  expect(schedules.status).toBe(200);
+  expect(schedules.body).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: scheduleName })]),
+  );
+
+  await openView(page, 'Access');
+  await page.getByRole('button', { name: 'Add User', exact: true }).click();
+  await page.getByLabel('Username', { exact: true }).fill(username);
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill('isolated-refresh-password');
+  await page.route('**/api/users', rejectRead);
+  const usersRefreshFailed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/users' &&
+      response.request().method() === 'GET' &&
+      response.status() === 503,
+  );
+  await page.getByRole('button', { name: 'Create User', exact: true }).click();
+  await usersRefreshFailed;
+  await expect(page.getByRole('status')).toContainText(`${username} added`);
+  await expect(
+    page
+      .getByRole('list', { name: 'Users' })
+      .getByText(username, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create User', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('alert')
+      .filter({ hasText: /refresh/i })
+      .first(),
+  ).toBeVisible();
+  await page.unroute('**/api/users', rejectRead);
+  const users = await browserJson(page, '/api/users');
+  expect(users.status).toBe(200);
+  expect(users.body).toEqual(
+    expect.arrayContaining([expect.objectContaining({ username })]),
+  );
+
+  expect(
+    await browserJson(
+      page,
+      `/api/users?username=${encodeURIComponent(username)}`,
+      { method: 'DELETE' },
+    ),
+  ).toEqual({ status: 204, body: null });
+  expect(
+    await browserJson(
+      page,
+      `/api/schedules?name=${encodeURIComponent(scheduleName)}`,
+      { method: 'DELETE' },
+    ),
+  ).toEqual({ status: 204, body: null });
+});
+
+test('retrying a partially applied draft saves only the remaining schedule', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  await openView(page, 'Schedules');
+  const firstName = 'e2e partial draft morning';
+  const secondName = 'e2e partial draft evening';
+  const drafts = [
+    {
+      name: firstName,
+      cron_expression: '0 7 * * 1',
+      action: 'open',
+      enabled: true,
+      description: 'Open Monday at 7 AM.',
+      summary: 'Monday mornings',
+      nextExecutions: ['2027-01-04T07:00:00.000Z'],
+    },
+    {
+      name: secondName,
+      cron_expression: '0 18 * * 1',
+      action: 'close',
+      enabled: false,
+      description: 'Close Monday at 6 PM.',
+      summary: 'Monday evenings',
+      nextExecutions: ['2027-01-04T18:00:00.000Z'],
+    },
+  ];
+  await page.route('**/api/schedules/draft/stream', (route) =>
+    route.fulfill({
+      contentType: 'application/x-ndjson',
+      body: `${JSON.stringify({ type: 'result', result: { interpretation: 'Open and close on Mondays.', drafts, questions: [], warnings: [] } })}\n`,
+    }),
+  );
+  const posts: string[] = [];
+  let rejectSecond = true;
+  await page.route('**/api/schedules', (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const { name } = route.request().postDataJSON() as { name: string };
+    posts.push(name);
+    if (name === secondName && rejectSecond) {
+      rejectSecond = false;
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Second schedule could not be saved.' }),
+      });
+    }
+    return route.continue();
+  });
+  await page
+    .getByLabel('Describe schedule')
+    .fill('Open Monday at 7 AM and close at 6 PM');
+  await page.getByRole('button', { name: 'Draft', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Review Drafts', exact: true }),
+  ).toBeVisible();
+  const pausedDraft = page.getByRole('article').filter({
+    has: page.getByRole('heading', { name: secondName, exact: true }),
+  });
+  await expect(pausedDraft.getByText('Paused', { exact: true })).toBeVisible();
+  await expect(
+    pausedDraft.getByText('Next times if enabled', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    pausedDraft.getByText('Next scheduled times', { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Apply All', exact: true }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText(
+    'Second schedule could not be saved.',
+  );
+  await expect(savedSchedule(page, firstName)).toBeVisible();
+  await expect(
+    page.getByRole('article').filter({
+      has: page.getByRole('heading', { name: firstName, exact: true }),
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('article').filter({
+      has: page.getByRole('heading', { name: secondName, exact: true }),
+    }),
+  ).toBeVisible();
+  const beforeRetry = await browserJson(page, '/api/schedules');
+  expect(beforeRetry.status).toBe(200);
+  const createdBeforeRetry = beforeRetry.body as Array<{ name: string }>;
+  expect(
+    createdBeforeRetry
+      .filter((schedule) => [firstName, secondName].includes(schedule.name))
+      .map((schedule) => schedule.name),
+  ).toEqual([firstName]);
+
+  await page.getByRole('button', { name: 'Apply All', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Review Drafts', exact: true }),
+  ).toHaveCount(0);
+  await expect(savedSchedule(page, secondName)).toBeVisible();
+  expect(posts).toEqual([firstName, secondName, secondName]);
+  const afterRetry = await browserJson(page, '/api/schedules');
+  expect(afterRetry.status).toBe(200);
+  const createdAfterRetry = afterRetry.body as Array<{
+    name: string;
+    enabled: boolean;
+  }>;
+  expect(
+    createdAfterRetry.filter((schedule) =>
+      [firstName, secondName].includes(schedule.name),
+    ),
+  ).toHaveLength(2);
+  expect(createdAfterRetry).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: secondName, enabled: false }),
+    ]),
+  );
+  await expect(
+    savedSchedule(page, secondName).getByText('Paused', { exact: true }),
+  ).toBeVisible();
+  for (const name of [firstName, secondName]) {
+    expect(
+      await browserJson(
+        page,
+        `/api/schedules?name=${encodeURIComponent(name)}`,
+        { method: 'DELETE' },
+      ),
+    ).toEqual({ status: 204, body: null });
+  }
 });
 
 test('AI schedule drafting works end-to-end', async ({ page }) => {

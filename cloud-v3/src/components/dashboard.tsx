@@ -13,14 +13,14 @@ const views = [
     label: 'Overview',
     icon: 'gate',
     title: 'Your gate, at a glance.',
-    description: 'Your gate, right where you need it.',
+    description: 'Gate commands, recent activity, and what’s next.',
   },
   {
     id: 'schedules',
     label: 'Schedules',
     icon: 'calendar',
     title: 'A schedule that fits your day.',
-    description: 'Build a routine that fits your day.',
+    description: 'Set recurring times to open and close your gate.',
   },
   {
     id: 'access',
@@ -38,6 +38,19 @@ const views = [
   },
 ] as const;
 
+export function getDashboardNavigation(
+  view: string | undefined,
+  isAdmin: boolean,
+) {
+  const availableViews = views.filter(
+    (item) => isAdmin || item.id === 'overview' || item.id === 'schedules',
+  );
+  return {
+    availableViews,
+    current: availableViews.find((item) => item.id === view) ?? views[0],
+  };
+}
+
 export function Dashboard({
   username,
   isAdmin,
@@ -49,10 +62,7 @@ export function Dashboard({
   view: string | undefined;
   diagnostics: ReactNode;
 }) {
-  const availableViews = views.filter(
-    (view) => isAdmin || view.id === 'overview' || view.id === 'schedules',
-  );
-  const current = availableViews.find((item) => item.id === view) ?? views[0];
+  const { availableViews, current } = getDashboardNavigation(view, isAdmin);
 
   return (
     <div className="app-shell">

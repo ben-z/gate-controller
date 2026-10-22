@@ -51,7 +51,11 @@ export function UpcomingSchedules() {
     );
 
   return (
-    <ol className="upcoming-list">
+    <ol
+      className="upcoming-list"
+      tabIndex={0}
+      aria-label="Upcoming gate commands"
+    >
       {upcoming.map(({ schedule, nextExecution }, index) => (
         <li className="upcoming-row" key={`${schedule.name}-${nextExecution}`}>
           <span className={`timeline-dot ${index === 0 ? 'next' : ''}`} />

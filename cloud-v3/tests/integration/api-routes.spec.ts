@@ -55,6 +55,29 @@ test("api routes enforce auth and controlled edge errors", async ({
   await login(page, admin.username, admin.password);
 
   expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username: admin.username, role: "user" },
+    })
+  ).toEqual({
+    status: 400,
+    body: { error: "Cannot demote the last admin user" },
+  });
+  const usersAfterRejectedDemotion = await browserJson(page, "/api/users");
+  expect(usersAfterRejectedDemotion.status).toBe(200);
+  expect(usersAfterRejectedDemotion.body).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ username: admin.username, role: "admin" }),
+    ])
+  );
+  expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username: admin.username },
+    })
+  ).toEqual({ status: 200, body: { success: true } });
+
+  expect(
     await browserJson(page, "/api/schedules", {
       body: {
         action: "open",
@@ -168,13 +191,19 @@ test("api routes enforce auth and controlled edge errors", async ({
 
   expect(
     await browserJson(page, "/api/users", {
-      body: { password, role: "user", username },
+      body: { password, role: "admin", username },
       method: "POST",
     })
   ).toMatchObject({
     status: 200,
-    body: { created_by: admin.username, role: "user", username },
+    body: { created_by: admin.username, role: "admin", username },
   });
+  expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username, role: "user" },
+    })
+  ).toEqual({ status: 200, body: { success: true } });
   expect(
     await browserJson(page, "/api/users", {
       body: { password, role: "user", username },

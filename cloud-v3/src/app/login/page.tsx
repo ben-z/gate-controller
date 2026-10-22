@@ -3,7 +3,7 @@
 import { login } from '@/lib/auth/login';
 import Form from 'next/form';
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { GateIllustration } from '@/components/gate-illustration';
 
@@ -23,6 +23,7 @@ function Brand() {
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, null);
+  const [username, setUsername] = useState('');
 
   return (
     <main className="login-page">
@@ -69,6 +70,8 @@ export default function LoginPage() {
                 type="text"
                 id="username"
                 name="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
                 required
                 autoComplete="username"
                 autoCapitalize="none"

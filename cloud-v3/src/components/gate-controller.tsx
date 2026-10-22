@@ -36,18 +36,33 @@ export function GateController() {
   async function handleGateAction(action: 'open' | 'close') {
     setPendingAction(action);
     setFeedback(null);
+    let saved = false;
     try {
       await updateGateStatus(action);
+      saved = true;
+      await mutate(
+        (current) => {
+          if (!current)
+            throw new Error(
+              'Gate status disappeared after the command was saved.',
+            );
+          return { ...current, status: action === 'open' ? 'open' : 'closed' };
+        },
+        { revalidate: false },
+      );
       setFeedback({
         error: false,
         message: `${action === 'open' ? 'Open' : 'Close'} command saved. The gate agent applies it at its next sync.`,
       });
       await mutate();
     } catch (error) {
+      const failureMessage =
+        error instanceof Error ? error.message : 'The gate command failed.';
       setFeedback({
         error: true,
-        message:
-          error instanceof Error ? error.message : 'The gate command failed.',
+        message: saved
+          ? 'The command was saved, but the latest gate details could not be loaded.'
+          : failureMessage,
       });
     } finally {
       setPendingAction(null);
@@ -94,9 +109,51 @@ export function GateController() {
           <p className="eyebrow">Requested state</p>
           <div className="gate-state" aria-live="polite">
             {isOpen ? 'Open' : 'Closed'}
-            <span className={`status-pill ${isOpen ? 'caution' : 'positive'}`}>
-              {isOpen ? 'Open access' : 'Closed access'}
-            </span>
+          </div>
+          <div className="gate-actions">
+            <div className="gate-action-buttons">
+              {(['open', 'close'] as const).map((action) => (
+                <button
+                  key={action}
+                  className={`button ${action === 'open' ? 'button-primary' : 'button-secondary'}`}
+                  onClick={() => handleGateAction(action)}
+                  disabled={
+                    (action === 'open' ? isOpen : !isOpen) ||
+                    pendingAction !== null ||
+                    !!isError ||
+                    isLoading
+                  }
+                  aria-busy={pendingAction === action}
+                >
+                  <Icon
+                    name={
+                      action === 'open' ? 'arrow-up-right' : 'arrow-down-right'
+                    }
+                  />
+                  {pendingAction === action
+                    ? 'Saving command…'
+                    : `${action === 'open' ? 'Open' : 'Close'} Gate`}
+                </button>
+              ))}
+            </div>
+            <p className="field-hint">
+              Commands take effect when the gate agent syncs. Physical position
+              is not reported.
+            </p>
+            {isError && (
+              <p className="inline-alert" role="alert">
+                Connection lost. Controls are paused until the gate status
+                refreshes.
+              </p>
+            )}
+            {feedback && (
+              <p
+                role={feedback.error ? 'alert' : 'status'}
+                className={feedback.error ? 'inline-alert' : 'feedback-success'}
+              >
+                {feedback.message}
+              </p>
+            )}
           </div>
           <GateIllustration open={isOpen} />
           <p className="gate-sync">
@@ -111,51 +168,6 @@ export function GateController() {
               />
             )}
           </p>
-        </div>
-        <div className="gate-actions">
-          <div className="gate-action-buttons">
-            {(['open', 'close'] as const).map((action) => (
-              <button
-                key={action}
-                className={`button ${action === 'open' ? 'button-primary' : 'button-secondary'}`}
-                onClick={() => handleGateAction(action)}
-                disabled={
-                  (action === 'open' ? isOpen : !isOpen) ||
-                  pendingAction !== null ||
-                  !!isError ||
-                  isLoading
-                }
-                aria-busy={pendingAction === action}
-              >
-                <Icon
-                  name={
-                    action === 'open' ? 'arrow-up-right' : 'arrow-down-right'
-                  }
-                />
-                {pendingAction === action
-                  ? 'Saving command…'
-                  : `${action === 'open' ? 'Open' : 'Close'} Gate`}
-              </button>
-            ))}
-          </div>
-          <p className="field-hint">
-            Commands take effect when the gate agent syncs. Physical position is
-            not reported.
-          </p>
-          {isError && (
-            <p className="inline-alert" role="alert">
-              Connection lost. Controls are paused until the gate status
-              refreshes.
-            </p>
-          )}
-          {feedback && (
-            <p
-              role={feedback.error ? 'alert' : 'status'}
-              className={feedback.error ? 'inline-alert' : 'feedback-success'}
-            >
-              {feedback.message}
-            </p>
-          )}
         </div>
       </section>
       <section
@@ -192,7 +204,11 @@ export function GateController() {
           <span className="small-label">COMMAND HISTORY</span>
         </div>
         {gateStatus.history?.length ? (
-          <ul className="activity-list">
+          <ul
+            className="activity-list"
+            tabIndex={0}
+            aria-label="Recent command history"
+          >
             {gateStatus.history.map((entry, index) => (
               <li className="activity-row" key={`${entry.timestamp}-${index}`}>
                 <span

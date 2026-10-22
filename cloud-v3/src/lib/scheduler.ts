@@ -1,6 +1,6 @@
 import { config } from "@/config";
 import { Schedule } from "@/types/schedule";
-import { Queue, QueueEvents, Worker } from "bullmq";
+import { Job, Queue, QueueEvents, UnrecoverableError, Worker } from "bullmq";
 export { validateCronExpression } from "@/lib/cron";
 import { getSchedule, updateGateStatus } from "./db";
 
@@ -19,6 +19,34 @@ const globalForScheduler = globalThis as typeof globalThis & {
   gateSchedulerRuntime?: SchedulerRuntime;
 };
 
+function requireCurrentSchedule(job: Job, schedule: Schedule | null): Schedule {
+  if (!schedule) {
+    throw new UnrecoverableError(
+      `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`,
+    );
+  }
+  if (!schedule.enabled) {
+    throw new UnrecoverableError(`Schedule "${schedule.name}" is disabled.`);
+  }
+  if (schedule.action !== job.data.action) {
+    throw new UnrecoverableError(
+      `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`,
+    );
+  }
+  if (job.opts.repeat?.pattern !== schedule.cron_expression) {
+    throw new UnrecoverableError(
+      `Schedule "${schedule.name}" cron expression does not match the scheduled job.`,
+    );
+  }
+  if (job.opts.repeat?.tz !== config.controllerTimezone) {
+    throw new UnrecoverableError(
+      `Schedule "${schedule.name}" timezone does not match the scheduled job.`,
+    );
+  }
+
+  return schedule;
+}
+
 function getSchedulerRuntime(): SchedulerRuntime {
   if (!globalForScheduler.gateSchedulerRuntime) {
     const queue = new Queue("gate-control", {
@@ -28,24 +56,16 @@ function getSchedulerRuntime(): SchedulerRuntime {
     const worker = new Worker(
       queue.name,
       async (job) => {
-        console.log(`Executing schedule: ${job.data.scheduleName}`);
-
-        const schedule = getSchedule(job.data.scheduleName);
-        if (!schedule) {
-          throw new Error(
-            `Schedule "${job.data.scheduleName}" not found, but job was scheduled.`
-          );
-        }
-        if (schedule.action !== job.data.action) {
-          throw new Error(
-            `Schedule "${job.data.scheduleName}" action mismatch. Database action: ${schedule.action}, Job action: ${job.data.action}`
-          );
-        }
+        const schedule = requireCurrentSchedule(
+          job,
+          getSchedule(job.data.scheduleName),
+        );
+        console.log(`Executing schedule: ${schedule.name}`);
         updateGateStatus(schedule.action, "schedule", schedule.name);
       },
       {
         connection: REDIS_CONNECTION_CONFIG,
-      }
+      },
     );
 
     const queueEvents = new QueueEvents(queue.name, {
@@ -84,14 +104,14 @@ export async function startSchedule(schedule: Schedule): Promise<void> {
       data: { scheduleName: schedule.name, action: schedule.action },
       opts: {
         removeOnComplete: true,
-        removeOnFail: 1000, // Keep failed jobs for 1000ms
+        removeOnFail: 1000,
         attempts: 3,
         backoff: {
           type: "exponential",
           delay: 1000,
         },
       },
-    }
+    },
   );
 }
 
@@ -108,12 +128,12 @@ export async function stopSchedule(name: string): Promise<void> {
  * Initializes all enabled schedules from the database
  */
 export async function initializeSchedules(
-  schedules: Schedule[]
+  schedules: Schedule[],
 ): Promise<void> {
   console.log(`Initializing ${schedules.length} schedules...`);
 
   await Promise.all(
-    schedules.filter((schedule) => schedule.enabled).map(startSchedule)
+    schedules.filter((schedule) => schedule.enabled).map(startSchedule),
   );
 }
 
@@ -132,13 +152,13 @@ export async function updateSchedule(schedule: Schedule): Promise<void> {
  * Gets upcoming schedule executions
  */
 export async function getUpcomingSchedules(
-  schedules: Schedule[]
+  schedules: Schedule[],
 ): Promise<Array<{ schedule: Schedule; nextExecution: Date }>> {
   const { queue } = getSchedulerRuntime();
   const scheduleByName = new Map(
     schedules
       .filter((schedule) => schedule.enabled)
-      .map((schedule) => [schedule.name, schedule])
+      .map((schedule) => [schedule.name, schedule]),
   );
   const delayedJobs = await queue.getDelayed();
 
@@ -150,6 +170,7 @@ export async function getUpcomingSchedules(
       return [];
     }
 
+    requireCurrentSchedule(job, schedule);
     const nextExecution = job.timestamp + job.delay;
     if (!Number.isFinite(nextExecution) || nextExecution <= 0) {
       throw new Error(`Invalid execution time for schedule "${scheduleName}"`);
@@ -162,6 +183,6 @@ export async function getUpcomingSchedules(
   });
 
   return upcoming.sort(
-    (a, b) => a.nextExecution.getTime() - b.nextExecution.getTime()
+    (a, b) => a.nextExecution.getTime() - b.nextExecution.getTime(),
   );
 }

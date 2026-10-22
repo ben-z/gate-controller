@@ -317,17 +317,32 @@ export function createUser(user: CreateUserParams): User {
   };
 }
 
-export function updateUser(user: UpdateUserParams): void {
-  const { statements } = getRuntime();
-  const existing = statements.getUserByUsername.get(user.username) as
-    | (UserRow & UserCredentials)
-    | undefined;
-  if (!existing) throw new Error(`User not found: ${user.username}`);
+export class LastAdminDemotionError extends Error {}
 
-  const passwordHash = user.password
-    ? bcrypt.hashSync(user.password, bcrypt.genSaltSync(10))
-    : existing.password_hash;
-  statements.updateUser.run(passwordHash, user.role ?? existing.role, user.username);
+export function updateUser(user: UpdateUserParams): void {
+  const { db, statements } = getRuntime();
+  db.transaction(() => {
+    const existing = statements.getUserByUsername.get(user.username) as
+      | (UserRow & UserCredentials)
+      | undefined;
+    if (!existing) throw new Error(`User not found: ${user.username}`);
+
+    if (existing.role === "admin" && user.role === "user") {
+      const adminCount = statements.countAdmins.get() as CountRow;
+      if (adminCount.count <= 1) {
+        throw new LastAdminDemotionError("Cannot demote the last admin user");
+      }
+    }
+
+    const passwordHash = user.password
+      ? bcrypt.hashSync(user.password, bcrypt.genSaltSync(10))
+      : existing.password_hash;
+    statements.updateUser.run(
+      passwordHash,
+      user.role ?? existing.role,
+      user.username
+    );
+  }).immediate();
 }
 
 export function deleteUser(username: string): void {

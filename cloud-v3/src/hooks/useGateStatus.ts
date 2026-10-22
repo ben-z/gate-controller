@@ -37,7 +37,8 @@ export async function updateGateStatus(action: 'open' | 'close') {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to update gate status');
+    const { error } = await res.json();
+    throw new Error(error);
   }
 
   return res.json();
