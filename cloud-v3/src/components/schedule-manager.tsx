@@ -174,6 +174,12 @@ export function ScheduleManager() {
     });
   }
 
+  function changePrompt(next: string) {
+    if (next === prompt) return;
+    setPrompt(next);
+    setDraftResult(null);
+  }
+
   function handleDraftSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (outsideEditorDisabled) return;
@@ -471,7 +477,7 @@ export function ScheduleManager() {
               id="schedule-prompt"
               className="field min-h-28 resize-y"
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={(event) => changePrompt(event.target.value)}
               placeholder="Open on weekdays at 7:30 AM and close at 6 PM…"
               rows={3}
               disabled={outsideEditorDisabled}
@@ -493,7 +499,7 @@ export function ScheduleManager() {
                 className="prompt-example"
                 disabled={outsideEditorDisabled}
                 onClick={() => {
-                  setPrompt(example);
+                  changePrompt(example);
                   promptInput.current?.focus();
                 }}
               >

@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import cronParser from 'cron-parser';
 import {
   admin,
   agentToken,
@@ -914,6 +915,36 @@ test('draft review preserves unapplied schedules after a save error', async ({
   expect((await browserJson(page, '/api/schedules')).body).not.toEqual(
     expect.arrayContaining([expect.objectContaining({ name })]),
   );
+
+  const prompt = page.getByLabel('Describe schedule');
+  const reviewHeading = page.getByRole('heading', {
+    name: 'Review Drafts',
+    exact: true,
+  });
+  await prompt.fill('Open weekdays at 8 AM');
+  await expect(reviewHeading).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Apply All', exact: true }),
+  ).toHaveCount(0);
+  await expect(prompt).toBeFocused();
+  await page.getByRole('button', { name: 'Draft', exact: true }).click();
+  await expect(reviewHeading).toBeFocused();
+  const example = page.getByRole('button', {
+    name: 'Open weekdays at 7:30 AM',
+    exact: true,
+  });
+  await example.click();
+  await expect(reviewHeading).toHaveCount(0);
+  await expect(prompt).toHaveValue('Open weekdays at 7:30 AM');
+  await expect(prompt).toBeFocused();
+  await page.getByRole('button', { name: 'Draft', exact: true }).click();
+  await expect(reviewHeading).toBeFocused();
+  await example.click();
+  await expect(reviewHeading).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Apply All', exact: true }),
+  ).toBeEnabled();
+  await expect(prompt).toBeFocused();
 
   const review = page
     .getByRole('article')
@@ -1951,6 +1982,11 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
   }
 
   await login(page, admin.username, admin.password);
+  await openView(page, 'System');
+  const timezone = await diagnosticValue(
+    page,
+    'Controller timezone',
+  ).innerText();
   await openView(page, 'Schedules');
 
   const before = await browserJson(page, '/api/schedules');
@@ -1969,6 +2005,9 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
   ).toBeVisible({ timeout: 30_000 });
   expect((await browserJson(page, '/api/schedules')).body).toEqual(before.body);
   await page.getByRole('button', { name: 'Apply All', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Review Drafts', exact: true }),
+  ).toHaveCount(0);
 
   let createdSchedules: Array<{
     action: 'open' | 'close';
@@ -1988,17 +2027,65 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
     })
     .toBeGreaterThan(0);
 
-  for (const schedule of createdSchedules) {
-    expect(schedule.action).toBe('open');
-    expect(schedule.cron_expression.trim().split(/\s+/)).toHaveLength(5);
-    expect(schedule.enabled).toBe(true);
-    await expect(savedSchedule(page, schedule.name)).toBeVisible();
-    expect(
-      await browserJson(
-        page,
-        `/api/schedules?name=${encodeURIComponent(schedule.name)}`,
-        { method: 'DELETE' },
-      ),
-    ).toEqual({ status: 204, body: null });
+  try {
+    const weekdays: number[] = [];
+    const localTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    for (const schedule of createdSchedules) {
+      expect(schedule.action).toBe('open');
+      expect(schedule.cron_expression.trim().split(/\s+/)).toHaveLength(5);
+      expect(schedule.enabled).toBe(true);
+      const interval = cronParser.parseExpression(schedule.cron_expression, {
+        tz: timezone,
+      });
+      expect(interval.fields.minute).toEqual([30]);
+      expect(interval.fields.hour).toEqual([7]);
+      expect(interval.fields.dayOfMonth).toEqual(
+        Array.from({ length: 31 }, (_, index) => index + 1),
+      );
+      expect(interval.fields.month).toEqual(
+        Array.from({ length: 12 }, (_, index) => index + 1),
+      );
+      weekdays.push(...interval.fields.dayOfWeek);
+      await expect(savedSchedule(page, schedule.name)).toBeVisible();
+    }
+    expect(weekdays.sort((first, second) => first - second)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    const upcoming = await browserJson(page, '/api/schedules/upcoming');
+    expect(upcoming.status).toBe(200);
+    const createdNames = new Set(createdSchedules.map(({ name }) => name));
+    const createdExecutions = (
+      upcoming.body as Array<{
+        schedule: { name: string };
+        nextExecution: string;
+      }>
+    ).filter(({ schedule }) => createdNames.has(schedule.name));
+    expect(createdExecutions).toHaveLength(createdSchedules.length);
+    for (const { nextExecution } of createdExecutions) {
+      const parts = Object.fromEntries(
+        localTime
+          .formatToParts(new Date(nextExecution))
+          .map(({ type, value }) => [type, value]),
+      );
+      expect(parts.hour).toBe('07');
+      expect(parts.minute).toBe('30');
+      expect(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']).toContain(parts.weekday);
+    }
+  } finally {
+    for (const { name } of createdSchedules) {
+      expect(
+        await browserJson(
+          page,
+          `/api/schedules?name=${encodeURIComponent(name)}`,
+          { method: 'DELETE' },
+        ),
+      ).toEqual({ status: 204, body: null });
+    }
   }
 });
