@@ -22,7 +22,7 @@ const childEnv = {
   NODE_ENV: "production",
   NEXT_PUBLIC_CONTROLLER_TIMEZONE: "UTC",
   OPENAI_API_KEY: process.env.E2E_OPENAI_API_KEY ?? "",
-  OPENAI_SCHEDULE_MODEL: process.env.E2E_OPENAI_SCHEDULE_MODEL ?? "gpt-5.5",
+  OPENAI_SCHEDULE_MODEL: process.env.E2E_OPENAI_SCHEDULE_MODEL,
   PORT: port,
   REDIS_HOST: "127.0.0.1",
   REDIS_PORT: redisPort,
