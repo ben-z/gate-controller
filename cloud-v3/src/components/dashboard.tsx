@@ -6,6 +6,7 @@ import { ScheduleManager } from './schedule-manager';
 import { UserManagement } from './user-management';
 import { Icon } from './icon';
 import { publicConfig } from '@/config';
+import { ViewContent } from './view-content';
 
 const views = [
   {
@@ -137,12 +138,15 @@ export function Dashboard({
             <h1>{current.title}</h1>
             <p className="muted">{current.description}</p>
           </div>
-          <div className="view-content" key={current.id}>
-            {current.id === 'overview' && <GateController />}
-            {current.id === 'schedules' && <ScheduleManager />}
-            {current.id === 'access' && <UserManagement />}
-            {current.id === 'system' && diagnostics}
-          </div>
+          {current.id === 'system' ? (
+            <div className="view-content">{diagnostics}</div>
+          ) : (
+            <ViewContent key={current.id}>
+              {current.id === 'overview' && <GateController />}
+              {current.id === 'schedules' && <ScheduleManager />}
+              {current.id === 'access' && <UserManagement />}
+            </ViewContent>
+          )}
         </main>
         <footer className="app-footer">
           <span>

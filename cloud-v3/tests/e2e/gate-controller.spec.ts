@@ -464,6 +464,161 @@ test('views support browser history, direct links, and narrow screens', async ({
   }
 });
 
+test('cold schedule controls protect input until hydration completes', async ({
+  browser,
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const storageState = await page.context().storageState();
+  const origin = new URL(page.url()).origin;
+  const schedulesUrl = `${origin}/dashboard?view=schedules`;
+
+  for (const delayed of ['bootstrap', 'dashboard chunk']) {
+    const context = await browser.newContext({ storageState });
+    const coldPage = await context.newPage();
+    let releaseScripts!: () => void;
+    let scriptRequested!: () => void;
+    let releaseRead!: () => void;
+    let readRequested!: () => void;
+    const scriptsReady = new Promise<void>((resolve) => {
+      releaseScripts = resolve;
+    });
+    const heldScript = new Promise<void>((resolve) => {
+      scriptRequested = resolve;
+    });
+    const readReady = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const heldRead = new Promise<void>((resolve) => {
+      readRequested = resolve;
+    });
+    const heldChunks: string[] = [];
+    const writes: string[] = [];
+    coldPage.on('request', (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith('/api/') && request.method() !== 'GET') {
+        writes.push(`${request.method()} ${pathname}`);
+      }
+    });
+    await coldPage.route(
+      (url) =>
+        url.origin === origin &&
+        url.pathname.startsWith('/_next/static/chunks/') &&
+        url.pathname.endsWith('.js') &&
+        (delayed === 'bootstrap' ||
+          url.pathname.includes('/app/dashboard/page-')),
+      async (route) => {
+        const { pathname } = new URL(route.request().url());
+        heldChunks.push(pathname);
+        if (delayed !== 'bootstrap' || pathname.includes('/main-app-')) {
+          scriptRequested();
+        }
+        await scriptsReady;
+        return route.continue();
+      },
+    );
+    await coldPage.route('**/api/schedules', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      readRequested();
+      await readReady;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            name: 'e2e completed client read',
+            cron_expression: '0 10 * * 2',
+            action: 'open',
+            enabled: false,
+          },
+        ]),
+      });
+    });
+
+    try {
+      await coldPage.goto(schedulesUrl, { waitUntil: 'commit' });
+      await heldScript;
+      const loading = coldPage
+        .getByRole('status')
+        .filter({ hasText: 'Loading controls…' });
+      const prompt = coldPage.getByLabel('Describe schedule', { exact: true });
+      const controls = coldPage.locator('[aria-busy]').filter({ has: prompt });
+      await expect(loading).toBeVisible();
+      expect(heldChunks.length).toBeGreaterThan(0);
+      if (delayed === 'dashboard chunk') expect(heldChunks).toHaveLength(1);
+      await expect(controls).toHaveAttribute('aria-busy', 'true');
+      await expect(controls).toHaveJSProperty('inert', true);
+      await coldPage.getByRole('main').focus();
+      expect(
+        await prompt.evaluate((element) => {
+          element.focus();
+          return document.activeElement === element;
+        }),
+      ).toBe(false);
+      await coldPage.keyboard.type('Input must wait for hydration');
+      await expect(prompt).toHaveValue('');
+      expect(writes).toEqual([]);
+
+      releaseScripts();
+      await heldRead;
+      await expect(loading).toHaveCount(0);
+      await expect(controls).toHaveAttribute('aria-busy', 'false');
+      await expect(controls).toHaveJSProperty('inert', false);
+      const description = `Keep this ${delayed} description after the read`;
+      await prompt.fill(description);
+      await expect(prompt).toBeFocused();
+      releaseRead();
+      await expect(
+        coldPage.getByRole('heading', {
+          name: 'e2e completed client read',
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(prompt).toHaveValue(description);
+      expect(writes).toEqual([]);
+    } finally {
+      releaseScripts();
+      releaseRead();
+      await context.close();
+    }
+  }
+
+  const noScriptContext = await browser.newContext({
+    storageState,
+    javaScriptEnabled: false,
+  });
+  try {
+    const noScriptPage = await noScriptContext.newPage();
+    await noScriptPage.goto(schedulesUrl);
+    await expect(
+      noScriptPage.getByText('JavaScript is required to use these controls.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await noScriptPage.goto(`${origin}/dashboard?view=system`);
+    const diagnostics = noScriptPage.getByRole('heading', {
+      name: 'Diagnostics',
+      exact: true,
+    });
+    await expect(diagnostics).toBeVisible();
+    expect(
+      await diagnostics.evaluate(
+        (element) => element.closest('[inert]') !== null,
+      ),
+    ).toBe(false);
+    await expect(
+      noScriptPage.getByText('Loading controls…', { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      noScriptPage.getByText('JavaScript is required to use these controls.', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  } finally {
+    await noScriptContext.close();
+  }
+});
+
 test('a rejected gate command shows an error and preserves the requested state', async ({
   page,
 }) => {
