@@ -37,3 +37,42 @@ jobs:
       - run: npm run e2e
         env:
           E2E_OPENAI_API_KEY: ${{ secrets.E2E_OPENAI_API_KEY }}
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build production container
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: docker build --build-arg SOURCE_SHA="$SOURCE_SHA" --tag gate-controller-smoke ./cloud-v3
+      - name: Verify production container startup
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker logs gate-controller-smoke
+            docker rm --force gate-controller-smoke
+          }
+          trap cleanup EXIT
+          docker run --detach --name gate-controller-smoke \
+            --publish 127.0.0.1:3100:3000 \
+            --env 'INITIAL_ADMIN_CREDENTIALS={"username":"smoke-test","password":"isolated-container-test"}' \
+            --env AGENT_TOKEN=isolated-container-test \
+            gate-controller-smoke
+          ready=false
+          for attempt in {1..30}; do
+            if response="$(curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/version)" &&
+              jq -e --arg sha "$SOURCE_SHA" '.version == $sha' <<<"$response"; then
+              ready=true
+              break
+            fi
+            test "$(docker inspect --format '{{.State.Running}}' gate-controller-smoke)" = true
+            sleep 2
+          done
+          test "$ready" = true
+          curl --fail --silent http://127.0.0.1:3100/login >/dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3100/api/gate)" = 401
