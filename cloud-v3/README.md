@@ -51,10 +51,10 @@ The application will be available at [http://localhost:3001](http://localhost:30
 - `npm run e2e` - Build the app and run browser E2E tests against isolated SQLite and Redis
 
 The E2E suite runs the Python gate agent in dry-run mode. Install its HTTP
-dependency before running the suite from a fresh checkout:
+dependency with Python 3.10 or later before running the suite from a fresh checkout:
 
 ```bash
-python3 -m pip install requests==2.31.0
+python3 -m pip install requests==2.34.2
 ```
 
 If the Playwright browser download is unavailable locally, use an installed Chrome:

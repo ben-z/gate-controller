@@ -28,9 +28,11 @@ jobs:
           cache-dependency-path: cloud-v3/package-lock.json
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y redis-server
       - run: npm ci
+      - run: npm audit --omit=dev
       - run: npm run lint
       - run: npm run typecheck
-      - run: python3 -m pip install requests==2.31.0
+      - run: python3 -m pip install requests==2.34.2 sentry-sdk==1.45.1
+      - run: python3 -m unittest discover -s ../agent -v
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
         env:
