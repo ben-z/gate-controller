@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useUsers, createUser, updateUser, deleteUser } from '@/hooks/useUsers';
+import { useFocusAfterCommit } from '@/hooks/useFocusAfterCommit';
 import { CreateUserParams, UpdateUserParams, User } from '@/types/user';
 import { publicConfig } from '@/config';
 import { Icon } from './icon';
@@ -15,15 +16,36 @@ export function UserManagement() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [deletingUsername, setDeletingUsername] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const focusAfterCommit = useFocusAfterCommit(pending);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const trigger = useRef<HTMLButtonElement | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const editorInput = useRef<HTMLInputElement>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
   const locked =
     pending || editor !== null || deletingUsername !== null || !!isError;
 
-  function restoreFocus() {
-    requestAnimationFrame(() => trigger.current?.focus());
+  function restoreFocus(button: HTMLButtonElement | null) {
+    focusAfterCommit(() => {
+      if (button?.disabled) retryButton.current?.focus();
+      else button?.focus();
+    });
+  }
+
+  async function handleRetry() {
+    const initiatingButton = retryButton.current;
+    await mutate();
+    focusAfterCommit(() => {
+      if (
+        document.activeElement !== document.body &&
+        document.activeElement !== initiatingButton
+      ) return;
+      if (retryButton.current) retryButton.current.focus();
+      else if (editorInput.current) editorInput.current.focus();
+      else addButton.current?.focus();
+    });
   }
 
   function openEditor(user: User | undefined, button: HTMLButtonElement) {
@@ -41,12 +63,12 @@ export function UserManagement() {
 
   function cancelEditor() {
     setEditor(null);
-    restoreFocus();
+    restoreFocus(trigger.current);
   }
 
   function cancelDelete() {
     setDeletingUsername(null);
-    restoreFocus();
+    restoreFocus(trigger.current);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -97,7 +119,8 @@ export function UserManagement() {
       });
     } finally {
       setPending(false);
-      if (saved) restoreFocus();
+      if (saved) restoreFocus(trigger.current);
+      else focusAfterCommit(() => noticeRef.current?.focus());
     }
   }
 
@@ -129,7 +152,8 @@ export function UserManagement() {
       });
     } finally {
       setPending(false);
-      if (saved) requestAnimationFrame(() => addButton.current?.focus());
+      if (saved) restoreFocus(addButton.current);
+      else focusAfterCommit(() => noticeRef.current?.focus());
     }
   }
 
@@ -141,7 +165,11 @@ export function UserManagement() {
       >
         {isError ? 'Unable to load users.' : 'Loading users…'}
         {isError && (
-          <button className="button button-secondary" onClick={() => mutate()}>
+          <button
+            ref={retryButton}
+            className="button button-secondary"
+            onClick={handleRetry}
+          >
             Try again
           </button>
         )}
@@ -171,9 +199,13 @@ export function UserManagement() {
 
       {isError && (
         <div className="inline-alert" role="alert">
-          The people list could not be refreshed. Saved changes are shown;
-          reload the list before making another change.
-          <button className="button button-secondary" onClick={() => mutate()}>
+          The people list could not be refreshed. Reload it before making
+          another change.
+          <button
+            ref={retryButton}
+            className="button button-secondary"
+            onClick={handleRetry}
+          >
             Try again
           </button>
         </div>
@@ -181,6 +213,8 @@ export function UserManagement() {
 
       {notice && (
         <div
+          ref={noticeRef}
+          tabIndex={-1}
           className={
             notice.kind === 'error' ? 'inline-alert' : 'feedback-success'
           }
@@ -209,6 +243,7 @@ export function UserManagement() {
                   Username
                 </label>
                 <input
+                  ref={editor.original ? undefined : editorInput}
                   id="user-username"
                   type="text"
                   autoComplete="off"
@@ -230,6 +265,7 @@ export function UserManagement() {
                   {editor.original ? 'New password' : 'Password'}
                 </label>
                 <input
+                  ref={editor.original ? editorInput : undefined}
                   id="user-password"
                   type="password"
                   autoComplete="new-password"

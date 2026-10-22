@@ -6,6 +6,7 @@ import cronstrue from 'cronstrue';
 import { formatInTimeZone } from 'date-fns-tz';
 import { Icon } from '@/components/icon';
 import { publicConfig } from '@/config';
+import { useFocusAfterCommit } from '@/hooks/useFocusAfterCommit';
 import {
   createSchedule,
   deleteSchedule,
@@ -56,10 +57,31 @@ export function ScheduleManager() {
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const editorInput = useRef<HTMLInputElement>(null);
   const reviewTitle = useRef<HTMLHeadingElement>(null);
+  const actionError = useRef<HTMLDivElement>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null);
   const manualTrigger = useRef<HTMLButtonElement>(null);
+  const retryButton = useRef<HTMLButtonElement>(null);
   const busy = pending !== null;
+  const focusAfterCommit = useFocusAfterCommit(busy);
   const outsideEditorDisabled = busy || editor !== null;
+
+  async function retrySchedules() {
+    const initiatingButton = retryButton.current;
+    await mutate();
+    void revalidate('/api/schedules/upcoming');
+    focusAfterCommit(() => {
+      if (
+        document.activeElement !== document.body &&
+        document.activeElement !== initiatingButton
+      ) return;
+      if (retryButton.current) return;
+      if (editorInput.current) {
+        editorInput.current.focus();
+      } else {
+        manualTrigger.current?.focus();
+      }
+    });
+  }
 
   if (!schedules) {
     return (
@@ -70,9 +92,10 @@ export function ScheduleManager() {
         {isError ? 'Schedules could not be loaded.' : 'Loading schedules…'}
         {isError && (
           <button
+            ref={retryButton}
             type="button"
             className="button button-secondary"
-            onClick={() => void mutate()}
+            onClick={() => void retrySchedules()}
           >
             Try again
           </button>
@@ -110,6 +133,7 @@ export function ScheduleManager() {
           ? error.message
           : 'The schedule could not be updated.',
       );
+      focusAfterCommit(() => actionError.current?.focus());
     } finally {
       setPending(null);
     }
@@ -128,7 +152,7 @@ export function ScheduleManager() {
     editorTrigger.current = trigger;
     setEditor(next);
     setError(null);
-    requestAnimationFrame(() => {
+    focusAfterCommit(() => {
       const input = editorInput.current;
       input?.scrollIntoView({ block: 'center' });
       input?.focus({ preventScroll: true });
@@ -137,7 +161,7 @@ export function ScheduleManager() {
 
   function closeEditor() {
     setEditor(null);
-    requestAnimationFrame(() => {
+    focusAfterCommit(() => {
       if (editorTrigger.current?.isConnected) {
         editorTrigger.current.focus();
       } else {
@@ -157,7 +181,7 @@ export function ScheduleManager() {
       });
       try {
         setDraftResult(await draftSchedules(prompt.trim(), setDraftProgress));
-        requestAnimationFrame(() => reviewTitle.current?.focus());
+        focusAfterCommit(() => reviewTitle.current?.focus());
       } finally {
         setDraftProgress(null);
       }
@@ -223,6 +247,7 @@ export function ScheduleManager() {
         displayedSchedules.filter((schedule) => schedule.name !== name),
         'Schedule deleted.',
       );
+      focusAfterCommit(() => manualTrigger.current?.focus());
       refreshSchedules();
     });
   }
@@ -232,7 +257,7 @@ export function ScheduleManager() {
   return (
     <div className="space-y-6">
       {error && (
-        <div role="alert" className="inline-alert">
+        <div ref={actionError} tabIndex={-1} role="alert" className="inline-alert">
           <Icon name="alert" />
           {error}
         </div>
@@ -250,10 +275,11 @@ export function ScheduleManager() {
             Schedules could not be refreshed. Showing cached schedules.
           </p>
           <button
+            ref={retryButton}
             type="button"
             className="button button-secondary"
             disabled={busy}
-            onClick={refreshSchedules}
+            onClick={() => void retrySchedules()}
           >
             Try again
           </button>

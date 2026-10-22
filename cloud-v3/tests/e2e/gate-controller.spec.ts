@@ -75,7 +75,9 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await page.getByLabel('Name', { exact: true }).fill(scheduleName);
   await page.getByLabel('Cron Expression').fill('0 8 * * 1-5');
   await page.getByLabel('Action', { exact: true }).selectOption('open');
-  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(scheduleName);
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+    scheduleName,
+  );
   await expect(page.getByLabel('Cron Expression')).toHaveValue('0 8 * * 1-5');
   const createdResponse = page.waitForResponse(
     (response) =>
@@ -239,6 +241,9 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
     .getByRole('button', { name: `Delete ${scheduleName}`, exact: true })
     .click();
   await expect(savedSchedule(page, scheduleName)).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add manually', exact: true }),
+  ).toBeFocused();
 });
 
 test('sign-in errors allow another attempt and sign-out ends the session', async ({
@@ -614,6 +619,7 @@ test('draft review preserves unapplied schedules after a save error', async ({
   await expect(page.getByRole('main').getByRole('alert')).toContainText(
     'This schedule could not be saved.',
   );
+  await expect(page.getByRole('main').getByRole('alert')).toBeFocused();
   await expect(
     page.getByRole('heading', { name: name, exact: true }),
   ).toBeVisible();
@@ -787,19 +793,38 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   await expect(
     page.getByRole('button', { name: 'Create Schedule', exact: true }),
   ).toHaveCount(0);
+  const scheduleRefreshAlert = page
+    .getByRole('main')
+    .getByRole('alert')
+    .filter({ hasText: /refresh/i });
+  await expect(scheduleRefreshAlert).toBeVisible();
   await expect(
-    page
-      .getByRole('main')
-      .getByRole('alert')
-      .filter({ hasText: /refresh/i })
-      .first(),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Add manually', exact: true }),
+  ).toBeFocused();
+  const retrySchedules = scheduleRefreshAlert.getByRole('button', {
+    name: 'Try again',
+    exact: true,
+  });
+  const scheduleRetryFailed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/schedules' &&
+      response.request().method() === 'GET' &&
+      response.status() === 503,
+  );
+  await retrySchedules.click();
+  await scheduleRetryFailed;
+  await expect(retrySchedules).toBeFocused();
   await page.unroute('**/api/schedules', rejectRead);
   const schedules = await browserJson(page, '/api/schedules');
   expect(schedules.status).toBe(200);
   expect(schedules.body).toEqual(
     expect.arrayContaining([expect.objectContaining({ name: scheduleName })]),
   );
+  await retrySchedules.click();
+  await expect(scheduleRefreshAlert).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add manually', exact: true }),
+  ).toBeFocused();
 
   await openView(page, 'Access');
   await page.getByRole('button', { name: 'Add User', exact: true }).click();
@@ -825,34 +850,363 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   await expect(
     page.getByRole('button', { name: 'Create User', exact: true }),
   ).toHaveCount(0);
-  await expect(
-    page
-      .getByRole('main')
-      .getByRole('alert')
-      .filter({ hasText: /refresh/i })
-      .first(),
-  ).toBeVisible();
+  const usersRefreshAlert = page
+    .getByRole('main')
+    .getByRole('alert')
+    .filter({ hasText: /people list could not be refreshed/i });
+  const retryUsers = usersRefreshAlert.getByRole('button', {
+    name: 'Try again',
+    exact: true,
+  });
+  await expect(usersRefreshAlert).toBeVisible();
+  await expect(retryUsers).toBeFocused();
+  const userRetryFailed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/users' &&
+      response.request().method() === 'GET' &&
+      response.status() === 503,
+  );
+  await retryUsers.click();
+  await userRetryFailed;
+  await expect(retryUsers).toBeFocused();
   await page.unroute('**/api/users', rejectRead);
   const users = await browserJson(page, '/api/users');
   expect(users.status).toBe(200);
   expect(users.body).toEqual(
     expect.arrayContaining([expect.objectContaining({ username })]),
   );
+  await retryUsers.click();
+  await expect(usersRefreshAlert).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add User', exact: true }),
+  ).toBeFocused();
 
-  expect(
-    await browserJson(
-      page,
-      `/api/users?username=${encodeURIComponent(username)}`,
-      { method: 'DELETE' },
-    ),
-  ).toEqual({ status: 204, body: null });
-  expect(
-    await browserJson(
-      page,
-      `/api/schedules?name=${encodeURIComponent(scheduleName)}`,
-      { method: 'DELETE' },
-    ),
-  ).toEqual({ status: 204, body: null });
+  await page
+    .getByRole('button', { name: `Edit ${username}`, exact: true })
+    .click();
+  await page.getByLabel('Role', { exact: true }).selectOption('admin');
+  await page.route('**/api/users', rejectRead);
+  await page.getByRole('button', { name: 'Update User', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText(`${username} updated`);
+  await expect(retryUsers).toBeFocused();
+  await page.unroute('**/api/users', rejectRead);
+  const updatedUsers = await browserJson(page, '/api/users');
+  expect(updatedUsers.status).toBe(200);
+  expect(updatedUsers.body).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ username, role: 'admin' }),
+    ]),
+  );
+  await retryUsers.click();
+  await expect(usersRefreshAlert).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add User', exact: true }),
+  ).toBeFocused();
+
+  await page
+    .getByRole('button', { name: `Delete ${username}`, exact: true })
+    .click();
+  await page.route('**/api/users', rejectRead);
+  await page.getByRole('button', { name: 'Delete user', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText(`${username} removed`);
+  await expect(retryUsers).toBeFocused();
+  await expect(
+    page
+      .getByRole('list', { name: 'Users' })
+      .getByText(username, { exact: true }),
+  ).toHaveCount(0);
+  await page.unroute('**/api/users', rejectRead);
+  const remainingUsers = await browserJson(page, '/api/users');
+  expect(remainingUsers.status).toBe(200);
+  expect(remainingUsers.body).not.toEqual(
+    expect.arrayContaining([expect.objectContaining({ username })]),
+  );
+  await retryUsers.click();
+  await expect(usersRefreshAlert).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add User', exact: true }),
+  ).toBeFocused();
+
+  await openView(page, 'Schedules');
+  page.once('dialog', (dialog) => dialog.accept());
+  await savedSchedule(page, scheduleName)
+    .getByRole('button', { name: `Delete ${scheduleName}`, exact: true })
+    .click();
+  await expect(savedSchedule(page, scheduleName)).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add manually', exact: true }),
+  ).toBeFocused();
+});
+
+test('read retries restore editor focus and preserve a chosen field', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const scheduleName = `e2e retry focus ${Date.now().toString(36)}`;
+  const scheduleUrl = `/api/schedules?name=${encodeURIComponent(scheduleName)}`;
+  let scheduleCreated = false;
+  function barrier() {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  try {
+    const created = await browserJson(page, '/api/schedules', {
+      method: 'POST',
+      body: {
+        name: scheduleName,
+        cron_expression: '0 10 * * 2',
+        action: 'open',
+        enabled: false,
+      },
+    });
+    scheduleCreated = created.status === 200;
+    expect(created.status).toBe(200);
+
+    for (const manager of [
+      {
+        view: 'schedules',
+        path: '/api/schedules',
+        edit: `Edit ${scheduleName}`,
+        initialField: 'Cron Expression',
+        chosenField: 'Action',
+      },
+      {
+        view: 'access',
+        path: '/api/users',
+        edit: `Edit ${admin.username}`,
+        initialField: 'New password',
+        chosenField: 'Role',
+      },
+    ]) {
+      for (const moveFocus of [false, true]) {
+        const initialStarted = barrier();
+        const initialResponse = barrier();
+        const retryStarted = barrier();
+        const retryResponse = barrier();
+        let firstRead = true;
+        const readUrl = (url: URL) => url.pathname === manager.path;
+        const holdReads = async (route: Route) => {
+          if (route.request().method() !== 'GET') return route.continue();
+          if (firstRead) {
+            firstRead = false;
+            initialStarted.release();
+            await initialResponse.promise;
+            return route.fulfill({
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: 'List refresh unavailable' }),
+            });
+          }
+          retryStarted.release();
+          await retryResponse.promise;
+          const response = await route.fetch();
+          return route.fulfill({ response });
+        };
+        await page.route(readUrl, holdReads);
+        try {
+          await page.goto(`/dashboard?view=${manager.view}`);
+          await initialStarted.promise;
+          await page
+            .getByRole('button', { name: manager.edit, exact: true })
+            .click();
+          const initialField = page.getByLabel(manager.initialField, {
+            exact: true,
+          });
+          const chosenField = page.getByLabel(manager.chosenField, {
+            exact: true,
+          });
+          await expect(initialField).toBeFocused();
+          initialResponse.release();
+          const refreshAlert = page
+            .getByRole('main')
+            .getByRole('alert')
+            .filter({ hasText: /refresh/i });
+          const retry = refreshAlert.getByRole('button', {
+            name: 'Try again',
+            exact: true,
+          });
+          await expect(refreshAlert).toBeVisible();
+          const recoveredRead = page.waitForResponse(
+            (response) =>
+              readUrl(new URL(response.url())) &&
+              response.request().method() === 'GET',
+          );
+          await retry.click();
+          await retryStarted.promise;
+          if (moveFocus) await chosenField.focus();
+          await expect(moveFocus ? chosenField : retry).toBeFocused();
+          retryResponse.release();
+          expect((await recoveredRead).status()).toBe(200);
+          await expect(refreshAlert).toHaveCount(0);
+          await expect(moveFocus ? chosenField : initialField).toBeFocused();
+          await page
+            .getByRole('button', { name: 'Cancel', exact: true })
+            .click();
+        } finally {
+          initialResponse.release();
+          retryResponse.release();
+          await page.unroute(readUrl, holdReads);
+        }
+      }
+    }
+  } finally {
+    if (scheduleCreated) {
+      expect(
+        await browserJson(page, scheduleUrl, { method: 'DELETE' }),
+      ).toEqual({ status: 204, body: null });
+    }
+  }
+});
+
+test('rejected schedule and user writes retain input and focus the error', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const suffix = Date.now().toString(36);
+  const scheduleName = `e2e rejected schedule ${suffix}`;
+  const username = `e2e-rejected-user-${suffix}`;
+  const scheduleUrl = `/api/schedules?name=${encodeURIComponent(scheduleName)}`;
+  const userUrl = `/api/users?username=${encodeURIComponent(username)}`;
+  const writeUrls = (url: URL) =>
+    ['/api/schedules', '/api/users'].includes(url.pathname);
+  const rejectWrite = (route: Route) =>
+    route.request().method() === 'GET'
+      ? route.continue()
+      : route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'This write could not be saved.' }),
+        });
+  let scheduleCreated = false;
+  let userCreated = false;
+  const writeError = page
+    .getByRole('main')
+    .getByRole('alert')
+    .filter({ hasText: 'This write could not be saved.' });
+
+  try {
+    await page.route(writeUrls, rejectWrite);
+    await openView(page, 'Schedules');
+    await page
+      .getByRole('button', { name: 'Add manually', exact: true })
+      .click();
+    await page.getByLabel('Name', { exact: true }).fill(scheduleName);
+    await page.getByLabel('Cron Expression').fill('0 10 * * 2');
+    await page.getByLabel('Action', { exact: true }).selectOption('open');
+    await page
+      .getByRole('button', { name: 'Create Schedule', exact: true })
+      .click();
+    await expect(writeError).toBeFocused();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+      scheduleName,
+    );
+    await expect(page.getByLabel('Cron Expression')).toHaveValue('0 10 * * 2');
+    await expect(page.getByLabel('Action', { exact: true })).toHaveValue(
+      'open',
+    );
+    await expect(
+      page.getByLabel('Enable this schedule', { exact: true }),
+    ).toBeChecked();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const schedulesAfterReject = await browserJson(page, '/api/schedules');
+    expect(schedulesAfterReject.status).toBe(200);
+    expect(schedulesAfterReject.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: scheduleName })]),
+    );
+
+    await openView(page, 'Access');
+    await page.getByRole('button', { name: 'Add User', exact: true }).click();
+    await page.getByLabel('Username', { exact: true }).fill(username);
+    await page
+      .getByLabel('Password', { exact: true })
+      .fill('rejected-user-password');
+    await page.getByLabel('Role', { exact: true }).selectOption('admin');
+    await page
+      .getByRole('button', { name: 'Create User', exact: true })
+      .click();
+    await expect(writeError).toBeFocused();
+    await expect(page.getByLabel('Username', { exact: true })).toHaveValue(
+      username,
+    );
+    await expect(page.getByLabel('Password', { exact: true })).toHaveValue(
+      'rejected-user-password',
+    );
+    await expect(page.getByLabel('Role', { exact: true })).toHaveValue('admin');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const usersAfterReject = await browserJson(page, '/api/users');
+    expect(usersAfterReject.status).toBe(200);
+    expect(usersAfterReject.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ username })]),
+    );
+
+    await page.unroute(writeUrls, rejectWrite);
+    const createdSchedule = await browserJson(page, '/api/schedules', {
+      method: 'POST',
+      body: {
+        name: scheduleName,
+        cron_expression: '0 10 * * 2',
+        action: 'open',
+        enabled: false,
+      },
+    });
+    scheduleCreated = createdSchedule.status === 200;
+    expect(createdSchedule.status).toBe(200);
+    const createdUser = await browserJson(page, '/api/users', {
+      method: 'POST',
+      body: { username, password: 'isolated-delete-password', role: 'user' },
+    });
+    userCreated = createdUser.status === 200;
+    expect(createdUser.status).toBe(200);
+    await page.route(writeUrls, rejectWrite);
+
+    await page.goto('/dashboard?view=schedules');
+    page.once('dialog', (dialog) => dialog.accept());
+    await savedSchedule(page, scheduleName)
+      .getByRole('button', { name: `Delete ${scheduleName}`, exact: true })
+      .click();
+    await expect(writeError).toBeFocused();
+    await expect(savedSchedule(page, scheduleName)).toBeVisible();
+    const schedulesAfterDelete = await browserJson(page, '/api/schedules');
+    expect(schedulesAfterDelete.status).toBe(200);
+    expect(schedulesAfterDelete.body).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: scheduleName })]),
+    );
+
+    await page.goto('/dashboard?view=access');
+    await page
+      .getByRole('button', { name: `Delete ${username}`, exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Delete user', exact: true })
+      .click();
+    await expect(writeError).toBeFocused();
+    await expect(
+      page.getByRole('button', { name: 'Delete user', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const usersAfterDelete = await browserJson(page, '/api/users');
+    expect(usersAfterDelete.status).toBe(200);
+    expect(usersAfterDelete.body).toEqual(
+      expect.arrayContaining([expect.objectContaining({ username })]),
+    );
+  } finally {
+    await page.unroute(writeUrls, rejectWrite);
+    if (userCreated) {
+      expect(await browserJson(page, userUrl, { method: 'DELETE' })).toEqual({
+        status: 204,
+        body: null,
+      });
+    }
+    if (scheduleCreated) {
+      expect(
+        await browserJson(page, scheduleUrl, { method: 'DELETE' }),
+      ).toEqual({ status: 204, body: null });
+    }
+  }
 });
 
 test('retrying a partially applied draft saves only the remaining schedule', async ({
