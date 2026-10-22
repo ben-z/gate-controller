@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import cronstrue from 'cronstrue';
-import { formatInTimeZone } from 'date-fns-tz';
 import { Icon } from '@/components/icon';
 import { publicConfig } from '@/config';
 import { useFocusAfterCommit } from '@/hooks/useFocusAfterCommit';
@@ -617,8 +616,12 @@ export function ScheduleManager() {
                       : 'Next times if enabled'}
                   </p>
                   <ul className="space-y-1 mt-1 text-sm">
-                    {draft.nextExecutions.slice(0, 3).map((execution) => (
-                      <li key={execution}>{formatExecution(execution)}</li>
+                    {draft.executionTimes.slice(0, 3).map((execution) => (
+                      <li key={execution.timestamp}>
+                        <time dateTime={execution.timestamp}>
+                          {execution.date} {execution.time}
+                        </time>
+                      </li>
                     ))}
                   </ul>
                   <div className="form-actions mt-4">
@@ -805,12 +808,4 @@ function toScheduleInput(schedule: ScheduleInput): ScheduleInput {
     action: schedule.action,
     enabled: schedule.enabled,
   };
-}
-
-function formatExecution(execution: string): string {
-  return formatInTimeZone(
-    execution,
-    publicConfig.controllerTimezone,
-    'yyyy-MM-dd EEE h:mm a',
-  );
 }

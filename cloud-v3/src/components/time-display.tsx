@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
-import { publicConfig } from '@/config';
 
 export function TimeDisplay({
   timestamp,
@@ -22,9 +21,16 @@ export function TimeDisplay({
   }, [format]);
 
   const date = new Date(timestamp);
+  if (format === 'relative') {
+    return (
+      <time dateTime={date.toISOString()} className={className}>
+        {formatDistanceToNow(date, { addSuffix: true })}
+      </time>
+    );
+  }
   const absoluteTime = formatInTimeZone(
     date,
-    format === 'relative' ? publicConfig.controllerTimezone : format,
+    format,
     'yyyy-MM-dd HH:mm:ss zzz',
   );
 
@@ -34,9 +40,7 @@ export function TimeDisplay({
       title={absoluteTime}
       className={className}
     >
-      {format === 'relative'
-        ? formatDistanceToNow(date, { addSuffix: true })
-        : absoluteTime}
+      {absoluteTime}
     </time>
   );
 }

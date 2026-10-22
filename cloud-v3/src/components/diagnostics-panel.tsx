@@ -9,6 +9,8 @@ const serverDiagnostics = [
   ['Database path', config.dbPath],
   ['Redis', `${config.redis.host}:${config.redis.port}`],
   ['Agent auth', secrets.agentToken ? 'required' : 'not required'],
+  ['Node version', process.version],
+  ['Timezone data', process.versions.tz],
   ['Node environment', process.env.NODE_ENV || 'development'],
 ] as const;
 

@@ -37,6 +37,8 @@ async function expectNoPrivateDiagnostics(page: Page, privateValues: string[]) {
     'Redis',
     'Agent auth',
     'Node environment',
+    'Node version',
+    'Timezone data',
     'Build information',
   ]) {
     await expect(page.getByText(label, { exact: true })).toHaveCount(0);
@@ -891,6 +893,11 @@ test('draft review preserves unapplied schedules after a save error', async ({
     description: 'At 07:00 AM, Monday through Friday',
     summary: 'Close every day at midnight',
     nextExecutions: ['2027-01-04T07:00:00.000Z'],
+    executionTimes: [{
+      timestamp: '2027-01-04T07:00:00.000Z',
+      date: '2027-01-04 Mon',
+      time: '7:00 AM',
+    }],
   };
   await page.route('**/api/schedules/draft/stream', (route) =>
     route.fulfill({
@@ -1010,6 +1017,93 @@ test('draft review preserves unapplied schedules after a save error', async ({
   ).toEqual({ status: 204, body: null });
 });
 
+test('draft review and Up next use the server clock labels and actual execution instant', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const name = 'e2e Vancouver Saturday morning';
+  // The server labels Vancouver's permanent UTC-7; clients must not reinterpret it.
+  const execution = {
+    timestamp: '2026-11-07T17:00:00.000Z',
+    date: '2026-11-07 Sat',
+    time: '10:00 AM',
+  };
+  const schedule = {
+    name,
+    cron_expression: '0 10 * * 6',
+    action: 'open',
+    enabled: false,
+  };
+  const before = await browserJson(page, '/api/schedules');
+  expect(before.status).toBe(200);
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      ['/api/gate', '/api/schedules'].includes(path) &&
+      ['POST', 'PUT', 'DELETE'].includes(request.method())
+    ) {
+      writes.push(`${request.method()} ${path}`);
+    }
+  });
+  await page.route('**/api/schedules/draft/stream', (route) =>
+    route.fulfill({
+      contentType: 'application/x-ndjson',
+      body: `${JSON.stringify({
+        type: 'result',
+        result: {
+          interpretation: 'A paused Saturday morning schedule.',
+          drafts: [{
+            ...schedule,
+            description: 'At 10:00 AM, only on Saturday',
+            summary: 'Open on Saturday mornings.',
+            nextExecutions: [execution.timestamp],
+            executionTimes: [execution],
+          }],
+          questions: [],
+          warnings: [],
+        },
+      })}\n`,
+    }),
+  );
+  await page.route('**/api/schedules/upcoming', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        schedule: { ...schedule, enabled: true },
+        nextExecution: execution.timestamp,
+        date: execution.date,
+        time: execution.time,
+      }]),
+    }),
+  );
+  await openView(page, 'Schedules');
+  await page.getByLabel('Describe schedule').fill(
+    'Create a paused schedule to open every Saturday at 10 AM.',
+  );
+  await page.getByRole('button', { name: 'Draft', exact: true }).click();
+  const review = page.getByRole('article').filter({
+    has: page.getByRole('heading', { name, exact: true }),
+  });
+  const draftTime = review.locator('time');
+  await expect(draftTime).toHaveText(`${execution.date} ${execution.time}`);
+  await expect(draftTime).toHaveAttribute('datetime', execution.timestamp);
+
+  await page.goto('/dashboard');
+  const upcoming = page.getByRole('region', { name: 'Up next', exact: true });
+  const row = upcoming.getByRole('listitem').filter({
+    has: page.getByRole('heading', { name, exact: true }),
+  });
+  for (const label of [execution.date, execution.time]) {
+    const time = row.locator('time').filter({ hasText: label });
+    await expect(time).toHaveText(label);
+    await expect(time).toHaveAttribute('datetime', execution.timestamp);
+  }
+  await expect(row.locator('time[title]')).toHaveCount(0);
+  expect((await browserJson(page, '/api/schedules')).body).toEqual(before.body);
+  expect(writes).toEqual([]);
+});
+
 test('draft actions return focus to the remaining review or composer', async ({
   page,
 }) => {
@@ -1030,7 +1124,18 @@ test('draft actions return focus to the remaining review or composer', async ({
             action: index === 0 ? 'open' : 'close',
             enabled: false,
             description: index === 0 ? 'Monday at 7 AM' : 'Monday at 6 PM',
-            nextExecutions: ['2027-01-04T07:00:00.000Z'],
+            nextExecutions: [
+              index === 0
+                ? '2027-01-04T07:00:00.000Z'
+                : '2027-01-04T18:00:00.000Z',
+            ],
+            executionTimes: [{
+              timestamp: index === 0
+                ? '2027-01-04T07:00:00.000Z'
+                : '2027-01-04T18:00:00.000Z',
+              date: '2027-01-04 Mon',
+              time: index === 0 ? '7:00 AM' : '6:00 PM',
+            }],
           })),
           questions: [],
           warnings: [],
@@ -1234,6 +1339,8 @@ test('upcoming recovery keeps focus on the result or a chosen link', async ({
         enabled: true,
       },
       nextExecution: '2027-01-04T07:00:00.000Z',
+      date: '2027-01-04 Mon',
+      time: '7:00 AM',
     },
   ];
 
@@ -1862,6 +1969,11 @@ test('retrying a partially applied draft saves only the remaining schedule', asy
       description: 'Open Monday at 7 AM.',
       summary: 'Monday mornings',
       nextExecutions: ['2027-01-04T07:00:00.000Z'],
+      executionTimes: [{
+        timestamp: '2027-01-04T07:00:00.000Z',
+        date: '2027-01-04 Mon',
+        time: '7:00 AM',
+      }],
     },
     {
       name: secondName,
@@ -1871,6 +1983,11 @@ test('retrying a partially applied draft saves only the remaining schedule', asy
       description: 'Close Monday at 6 PM.',
       summary: 'Monday evenings',
       nextExecutions: ['2027-01-04T18:00:00.000Z'],
+      executionTimes: [{
+        timestamp: '2027-01-04T18:00:00.000Z',
+        date: '2027-01-04 Mon',
+        time: '6:00 PM',
+      }],
     },
   ];
   await page.route('**/api/schedules/draft/stream', (route) =>
@@ -2003,6 +2120,12 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Review Drafts' }),
   ).toBeVisible({ timeout: 30_000 });
+  const previewTimes = page.getByRole('article').locator('time');
+  expect(await previewTimes.count()).toBeGreaterThan(0);
+  for (const time of await previewTimes.all()) {
+    await expect(time).toHaveText(/^\d{4}-\d{2}-\d{2} (Mon|Tue|Wed|Thu|Fri) 7:30 AM$/);
+    await expect(time).toHaveAttribute('datetime', /Z$/);
+  }
   expect((await browserJson(page, '/api/schedules')).body).toEqual(before.body);
   await page.getByRole('button', { name: 'Apply All', exact: true }).click();
   await expect(
@@ -2064,10 +2187,12 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
       upcoming.body as Array<{
         schedule: { name: string };
         nextExecution: string;
+        date: string;
+        time: string;
       }>
     ).filter(({ schedule }) => createdNames.has(schedule.name));
     expect(createdExecutions).toHaveLength(createdSchedules.length);
-    for (const { nextExecution } of createdExecutions) {
+    for (const { nextExecution, date, time } of createdExecutions) {
       const parts = Object.fromEntries(
         localTime
           .formatToParts(new Date(nextExecution))
@@ -2076,6 +2201,8 @@ test('AI schedule drafting works end-to-end', async ({ page }) => {
       expect(parts.hour).toBe('07');
       expect(parts.minute).toBe('30');
       expect(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']).toContain(parts.weekday);
+      expect(date).toMatch(/^\d{4}-\d{2}-\d{2} (Mon|Tue|Wed|Thu|Fri)$/);
+      expect(time).toBe('7:30 AM');
     }
   } finally {
     for (const { name } of createdSchedules) {

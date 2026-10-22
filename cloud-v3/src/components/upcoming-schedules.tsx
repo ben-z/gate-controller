@@ -1,14 +1,10 @@
 'use client';
 
-import { Schedule } from '@/types/schedule';
-import { publicConfig } from '@/config';
+import type { UpcomingSchedule } from '@/types/schedule';
 import { TimeDisplay } from './time-display';
 import { Icon } from './icon';
-import { formatInTimeZone } from 'date-fns-tz';
 import useSWR from 'swr';
 import { useCallback, useLayoutEffect, useRef } from 'react';
-
-type UpcomingSchedule = { schedule: Schedule; nextExecution: string };
 
 async function fetcher(url: string) {
   const response = await fetch(url);
@@ -84,16 +80,12 @@ export function UpcomingSchedules() {
       tabIndex={0}
       aria-label="Upcoming gate commands"
     >
-      {upcoming.map(({ schedule, nextExecution }, index) => (
+      {upcoming.map(({ schedule, nextExecution, date, time }, index) => (
         <li className="upcoming-row" key={`${schedule.name}-${nextExecution}`}>
           <span className={`timeline-dot ${index === 0 ? 'next' : ''}`} />
           <div className="upcoming-copy">
             <div className="upcoming-date">
-              {formatInTimeZone(
-                nextExecution,
-                publicConfig.controllerTimezone,
-                'yyyy-MM-dd EEE',
-              )}
+              <time dateTime={nextExecution}>{date}</time>
               <TimeDisplay
                 timestamp={new Date(nextExecution).getTime()}
                 format="relative"
@@ -101,11 +93,7 @@ export function UpcomingSchedules() {
             </div>
             <h3>{schedule.name}</h3>
             <div className="upcoming-time">
-              {formatInTimeZone(
-                nextExecution,
-                publicConfig.controllerTimezone,
-                'h:mm a',
-              )}
+              <time dateTime={nextExecution}>{time}</time>
               <span>
                 {schedule.action === 'open' ? 'Open gate' : 'Close gate'}
               </span>
