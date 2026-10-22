@@ -75,7 +75,23 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await page.getByLabel('Name', { exact: true }).fill(scheduleName);
   await page.getByLabel('Cron Expression').fill('0 8 * * 1-5');
   await page.getByLabel('Action', { exact: true }).selectOption('open');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(scheduleName);
+  await expect(page.getByLabel('Cron Expression')).toHaveValue('0 8 * * 1-5');
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/schedules' &&
+      response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Create Schedule' }).click();
+  const response = await createdResponse;
+  const created = await response.json();
+  expect(response.status(), JSON.stringify(created)).toBe(200);
+  expect(created).toMatchObject({
+    name: scheduleName,
+    cron_expression: '0 8 * * 1-5',
+    action: 'open',
+    enabled: true,
+  });
   const schedule = savedSchedule(page, scheduleName);
   await expect(schedule).toBeVisible();
 

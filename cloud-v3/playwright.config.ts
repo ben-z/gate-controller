@@ -15,7 +15,7 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
   },
   webServer: {
     command: "npm run e2e:server",
