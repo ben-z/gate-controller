@@ -14,7 +14,7 @@ A Next.js-based web application for controlling and monitoring gates.
 
 ## Prerequisites
 
-- Node.js 22.11.0 or later
+- Node.js 22.23.4 or later
 - npm or yarn package manager
 - Docker (for containerized deployment)
 
