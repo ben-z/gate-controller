@@ -70,6 +70,7 @@ jobs:
               ready=true
               break
             fi
+            test "$(docker inspect --format '{{.State.Running}}' gate-controller-smoke)" = true
             sleep 2
           done
           test "$ready" = true
