@@ -857,6 +857,116 @@ test('a confirmed gate command stays visible when the status refresh fails', asy
   }
 });
 
+test('upcoming recovery keeps focus on the result or a chosen link', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  const now = new Date();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(new Date(now.getTime() + 1000));
+  const upcomingUrl = '**/api/schedules/upcoming';
+  const populated = [
+    {
+      schedule: {
+        name: 'e2e upcoming focus',
+        cron_expression: '0 7 * * 1',
+        action: 'open',
+        enabled: true,
+      },
+      nextExecution: '2027-01-04T07:00:00.000Z',
+    },
+  ];
+
+  for (const result of [[], populated]) {
+    for (const { recovery, moveFocus } of [
+      { recovery: 'keyboard', moveFocus: false },
+      { recovery: 'keyboard', moveFocus: true },
+      { recovery: 'automatic', moveFocus: false },
+      { recovery: 'automatic', moveFocus: true },
+    ]) {
+      let firstRead = true;
+      let releaseRecovery!: () => void;
+      let recoveryStarted!: () => void;
+      const recoveryRequest = new Promise<void>((resolve) => {
+        recoveryStarted = resolve;
+      });
+      const recoveryResponse = new Promise<void>((resolve) => {
+        releaseRecovery = resolve;
+      });
+      const holdRecovery = async (route: Route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        if (firstRead) {
+          firstRead = false;
+          return route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'Upcoming schedules unavailable' }),
+          });
+        }
+        recoveryStarted();
+        await recoveryResponse;
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(result),
+        });
+      };
+      await page.route(upcomingUrl, holdRecovery);
+      try {
+        await page.clock.setSystemTime(new Date());
+        await page.goto('/dashboard');
+        const upcoming = page.getByRole('region', {
+          name: 'Up next',
+          exact: true,
+        });
+        const error = upcoming.getByRole('alert');
+        const retry = error.getByRole('button', {
+          name: 'Try again',
+          exact: true,
+        });
+        const manage = upcoming.getByRole('link', {
+          name: 'Manage schedules',
+          exact: true,
+        });
+        await expect(error).toContainText('Unable to load upcoming schedules.');
+        await retry.focus();
+        if (recovery === 'keyboard') {
+          await retry.press('Enter');
+        } else {
+          await page.clock.fastForward('01:00');
+        }
+        await recoveryRequest;
+        if (moveFocus) await manage.focus();
+        await expect(moveFocus ? manage : retry).toBeFocused();
+        releaseRecovery();
+        await expect(error).toHaveCount(0);
+        const recovered = result.length
+          ? upcoming.getByRole('list', {
+              name: 'Upcoming gate commands',
+              exact: true,
+            })
+          : upcoming.getByRole('group', {
+              name: 'No upcoming gate commands',
+              exact: true,
+            });
+        await expect(recovered).toBeVisible();
+        if (result.length) {
+          await expect(
+            recovered.getByRole('heading', {
+              name: 'e2e upcoming focus',
+              exact: true,
+            }),
+          ).toBeVisible();
+        }
+        await expect(moveFocus ? manage : recovered).toBeFocused();
+      } finally {
+        releaseRecovery();
+        await page.unroute(upcomingUrl, holdRecovery);
+      }
+    }
+  }
+});
+
 test('confirmed schedule and user saves survive a failed list refresh', async ({
   page,
 }) => {

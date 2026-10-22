@@ -6,6 +6,7 @@ import { TimeDisplay } from './time-display';
 import { Icon } from './icon';
 import { formatInTimeZone } from 'date-fns-tz';
 import useSWR from 'swr';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 
 type UpcomingSchedule = { schedule: Schedule; nextExecution: string };
 
@@ -23,12 +24,32 @@ export function UpcomingSchedules() {
   } = useSWR<UpcomingSchedule[]>('/api/schedules/upcoming', fetcher, {
     refreshInterval: 5000,
   });
+  const emptyState = useRef<HTMLDivElement>(null);
+  const upcomingList = useRef<HTMLOListElement>(null);
+  const retryWasFocused = useRef(false);
+  const retryRef = useCallback((button: HTMLButtonElement | null) => {
+    if (!button) return;
+    // Automatic recovery also removes Retry; capture focus before DOM removal.
+    return () => {
+      retryWasFocused.current = document.activeElement === button;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (error || !retryWasFocused.current) return;
+    retryWasFocused.current = false;
+    (upcomingList.current ?? emptyState.current)?.focus();
+  }, [error]);
 
   if (error)
     return (
       <div className="card-body inline-alert" role="alert">
         {error.message}
-        <button className="button button-secondary" onClick={() => mutate()}>
+        <button
+          ref={retryRef}
+          className="button button-secondary"
+          onClick={() => mutate()}
+        >
           Try again
         </button>
       </div>
@@ -41,7 +62,13 @@ export function UpcomingSchedules() {
     );
   if (!upcoming.length)
     return (
-      <div className="empty-state upcoming-empty">
+      <div
+        ref={emptyState}
+        tabIndex={-1}
+        role="group"
+        aria-label="No upcoming gate commands"
+        className="empty-state upcoming-empty"
+      >
         <span className="empty-icon">
           <Icon name="calendar" />
         </span>
@@ -52,6 +79,7 @@ export function UpcomingSchedules() {
 
   return (
     <ol
+      ref={upcomingList}
       className="upcoming-list"
       tabIndex={0}
       aria-label="Upcoming gate commands"
