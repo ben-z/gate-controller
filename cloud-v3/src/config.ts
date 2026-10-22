@@ -29,7 +29,7 @@ export const publicConfig = {
 export const config = {
   ...publicConfig,
   dbPath: process.env.DB_PATH || "data/gate.db",
-  scheduleDraftModel: process.env.OPENAI_SCHEDULE_MODEL || "gpt-5.5",
+  scheduleDraftModel: process.env.OPENAI_SCHEDULE_MODEL || "gpt-6-luna",
   redis: {
     host: process.env.REDIS_HOST || "localhost",
     port: parsePort(process.env.REDIS_PORT, 6379),
