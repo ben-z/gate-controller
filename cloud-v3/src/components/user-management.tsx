@@ -22,6 +22,7 @@ export function UserManagement() {
   const trigger = useRef<HTMLButtonElement | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
+  const deleteCancelButton = useRef<HTMLButtonElement>(null);
   const editorInput = useRef<HTMLInputElement>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
   const locked =
@@ -35,15 +36,16 @@ export function UserManagement() {
   }
 
   async function handleRetry() {
-    const initiatingButton = retryButton.current;
+    const initiatingFocus = document.activeElement;
     await mutate();
     focusAfterCommit(() => {
       if (
         document.activeElement !== document.body &&
-        document.activeElement !== initiatingButton
+        document.activeElement !== initiatingFocus
       ) return;
       if (retryButton.current) retryButton.current.focus();
       else if (editorInput.current) editorInput.current.focus();
+      else if (deleteCancelButton.current) deleteCancelButton.current.focus();
       else addButton.current?.focus();
     });
   }
@@ -73,7 +75,7 @@ export function UserManagement() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editor || pending) return;
+    if (!editor || pending || isError) return;
     setPending(true);
     setNotice(null);
     let saved = false;
@@ -125,7 +127,7 @@ export function UserManagement() {
   }
 
   async function handleDelete(username: string) {
-    if (pending) return;
+    if (pending || isError) return;
     setPending(true);
     setNotice(null);
     let saved = false;
@@ -384,6 +386,7 @@ export function UserManagement() {
                     trigger.current = event.currentTarget;
                     setNotice(null);
                     setDeletingUsername(user.username);
+                    focusAfterCommit(() => deleteCancelButton.current?.focus());
                   }}
                   aria-label={`Delete ${user.username}`}
                   disabled={locked}
@@ -392,7 +395,11 @@ export function UserManagement() {
                 </button>
               </div>
               {deletingUsername === user.username && (
-                <div className="delete-confirmation">
+                <div
+                  className="delete-confirmation"
+                  role="group"
+                  aria-label={`Remove ${user.username}`}
+                >
                   <p>
                     Remove <strong>{user.username}</strong>? They will lose
                     access to the gate.
@@ -401,11 +408,12 @@ export function UserManagement() {
                     <button
                       className="button button-danger"
                       onClick={() => handleDelete(user.username)}
-                      disabled={pending}
+                      disabled={pending || !!isError}
                     >
                       {pending ? 'Removing…' : 'Delete user'}
                     </button>
                     <button
+                      ref={deleteCancelButton}
                       className="button button-secondary"
                       onClick={cancelDelete}
                       disabled={pending}

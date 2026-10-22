@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
+import { useFocusAfterCommit } from '@/hooks/useFocusAfterCommit';
 import { TimeDisplay } from './time-display';
 import { UpcomingSchedules } from './upcoming-schedules';
 import { GateIllustration } from './gate-illustration';
@@ -14,6 +15,8 @@ export function GateController() {
   const [pendingAction, setPendingAction] = useState<'open' | 'close' | null>(
     null,
   );
+  const focusAfterCommit = useFocusAfterCommit(pendingAction !== null);
+  const feedbackRef = useRef<HTMLParagraphElement>(null);
   const [feedback, setFeedback] = useState<{
     error: boolean;
     message: string;
@@ -34,6 +37,7 @@ export function GateController() {
   }, [lastContactTimestamp]);
 
   async function handleGateAction(action: 'open' | 'close') {
+    const initiatingFocus = document.activeElement;
     setPendingAction(action);
     setFeedback(null);
     let saved = false;
@@ -66,6 +70,12 @@ export function GateController() {
       });
     } finally {
       setPendingAction(null);
+      focusAfterCommit(() => {
+        if (
+          document.activeElement === document.body ||
+          document.activeElement === initiatingFocus
+        ) feedbackRef.current?.focus();
+      });
     }
   }
 
@@ -148,6 +158,8 @@ export function GateController() {
             )}
             {feedback && (
               <p
+                ref={feedbackRef}
+                tabIndex={-1}
                 role={feedback.error ? 'alert' : 'status'}
                 className={feedback.error ? 'inline-alert' : 'feedback-success'}
               >

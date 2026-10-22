@@ -66,13 +66,13 @@ export function ScheduleManager() {
   const outsideEditorDisabled = busy || editor !== null;
 
   async function retrySchedules() {
-    const initiatingButton = retryButton.current;
+    const initiatingFocus = document.activeElement;
     await mutate();
     void revalidate('/api/schedules/upcoming');
     focusAfterCommit(() => {
       if (
         document.activeElement !== document.body &&
-        document.activeElement !== initiatingButton
+        document.activeElement !== initiatingFocus
       ) return;
       if (retryButton.current) return;
       if (editorInput.current) {
@@ -147,6 +147,10 @@ export function ScheduleManager() {
     });
   }
 
+  function focusReviewOrPrompt() {
+    (reviewTitle.current ?? promptInput.current)?.focus();
+  }
+
   function openEditor(next: Editor, trigger: HTMLButtonElement) {
     if (outsideEditorDisabled) return;
     editorTrigger.current = trigger;
@@ -165,7 +169,7 @@ export function ScheduleManager() {
       if (editorTrigger.current?.isConnected) {
         editorTrigger.current.focus();
       } else {
-        manualTrigger.current?.focus();
+        focusReviewOrPrompt();
       }
     });
   }
@@ -205,6 +209,7 @@ export function ScheduleManager() {
         refreshSchedules();
       }
       if (operation === 'apply:all') setPrompt('');
+      focusAfterCommit(focusReviewOrPrompt);
     });
   }
 
@@ -547,7 +552,10 @@ export function ScheduleManager() {
                 type="button"
                 className="button button-ghost"
                 disabled={outsideEditorDisabled}
-                onClick={() => setDraftResult(null)}
+                onClick={() => {
+                  setDraftResult(null);
+                  focusAfterCommit(focusReviewOrPrompt);
+                }}
               >
                 Dismiss
               </button>

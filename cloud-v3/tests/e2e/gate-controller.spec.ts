@@ -500,6 +500,12 @@ test('a rejected gate command shows an error and preserves the requested state',
   await expect(page.getByRole('main').getByRole('alert')).toContainText(
     /failed|unavailable/i,
   );
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('alert')
+      .filter({ hasText: /failed|unavailable/i }),
+  ).toBeFocused();
   await expect(page.locator('.gate-state')).toContainText(
     status === 'open' ? 'Open' : 'Closed',
   );
@@ -636,11 +642,98 @@ test('draft review preserves unapplied schedules after a save error', async ({
     page.getByRole('heading', { name: 'Review Drafts' }),
   ).toHaveCount(0);
   await expect(savedSchedule(page, name)).toBeVisible();
+  await expect(page.getByLabel('Describe schedule')).toBeFocused();
   expect(
     await browserJson(page, `/api/schedules?name=${encodeURIComponent(name)}`, {
       method: 'DELETE',
     }),
   ).toEqual({ status: 204, body: null });
+});
+
+test('draft actions return focus to the remaining review or composer', async ({
+  page,
+}) => {
+  await login(page, admin.username, admin.password);
+  await openView(page, 'Schedules');
+  const prefix = `e2e review focus ${Date.now().toString(36)}`;
+  let draftNames: string[] = [];
+  await page.route('**/api/schedules/draft/stream', (route) =>
+    route.fulfill({
+      contentType: 'application/x-ndjson',
+      body: `${JSON.stringify({
+        type: 'result',
+        result: {
+          interpretation: 'Two paused schedules to review.',
+          drafts: draftNames.map((name, index) => ({
+            name,
+            cron_expression: index === 0 ? '0 7 * * 1' : '0 18 * * 1',
+            action: index === 0 ? 'open' : 'close',
+            enabled: false,
+            description: index === 0 ? 'Monday at 7 AM' : 'Monday at 6 PM',
+            nextExecutions: ['2027-01-04T07:00:00.000Z'],
+          })),
+          questions: [],
+          warnings: [],
+        },
+      })}\n`,
+    }),
+  );
+  const composer = page.getByLabel('Describe schedule');
+  const reviewHeading = page.getByRole('heading', {
+    name: 'Review Drafts',
+    exact: true,
+  });
+
+  try {
+    for (const action of ['Dismiss', 'Apply', 'Edit']) {
+      draftNames = [
+        `${prefix} ${action} morning`,
+        `${prefix} ${action} evening`,
+      ];
+      await composer.fill('Review two paused Monday schedules');
+      await page.getByRole('button', { name: 'Draft', exact: true }).click();
+      await expect(reviewHeading).toBeFocused();
+      if (action === 'Dismiss') {
+        await page
+          .getByRole('button', { name: 'Dismiss', exact: true })
+          .click();
+        await expect(reviewHeading).toHaveCount(0);
+        await expect(composer).toBeFocused();
+        continue;
+      }
+
+      for (const [index, name] of draftNames.entries()) {
+        const draft = page.getByRole('article').filter({
+          has: page.getByRole('heading', { name, exact: true }),
+        });
+        await draft.getByRole('button', { name: action, exact: true }).click();
+        if (action === 'Edit') {
+          await page
+            .getByLabel('Cron Expression')
+            .fill(index === 0 ? '0 8 * * 1' : '0 19 * * 1');
+          await page
+            .getByRole('button', { name: 'Create Schedule', exact: true })
+            .click();
+        }
+        await expect(savedSchedule(page, name)).toBeVisible();
+        await expect(draft).toHaveCount(0);
+        await expect(index === 0 ? reviewHeading : composer).toBeFocused();
+      }
+    }
+  } finally {
+    const schedules = await browserJson(page, '/api/schedules');
+    expect(schedules.status).toBe(200);
+    for (const { name } of schedules.body as Array<{ name: string }>) {
+      if (!name.startsWith(prefix)) continue;
+      expect(
+        await browserJson(
+          page,
+          `/api/schedules?name=${encodeURIComponent(name)}`,
+          { method: 'DELETE' },
+        ),
+      ).toEqual({ status: 204, body: null });
+    }
+  }
 });
 
 test('gate commands fit the initial viewport and remain readable with text spacing', async ({
@@ -726,6 +819,12 @@ test('a confirmed gate command stays visible when the status refresh fails', asy
     await expect(page.getByRole('status')).toContainText(
       `${label} command saved`,
     );
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('status')
+        .filter({ hasText: `${label} command saved` }),
+    ).toBeFocused();
     await expect(page.locator('.gate-state')).toContainText(
       action === 'open' ? 'Open' : 'Closed',
     );
@@ -982,7 +1081,12 @@ test('read retries restore editor focus and preserve a chosen field', async ({
         chosenField: 'Role',
       },
     ]) {
-      for (const moveFocus of [false, true]) {
+      for (const { activation, moveFocus } of [
+        { activation: 'pointer', moveFocus: false },
+        { activation: 'pointer', moveFocus: true },
+        { activation: 'keyboard', moveFocus: false },
+        { activation: 'without focus', moveFocus: false },
+      ]) {
         const initialStarted = barrier();
         const initialResponse = barrier();
         const retryStarted = barrier();
@@ -1035,10 +1139,24 @@ test('read retries restore editor focus and preserve a chosen field', async ({
               readUrl(new URL(response.url())) &&
               response.request().method() === 'GET',
           );
-          await retry.click();
+          if (activation === 'keyboard') {
+            await retry.focus();
+            await retry.press('Enter');
+          } else if (activation === 'without focus') {
+            await page.getByRole('main').focus();
+            await retry.dispatchEvent('click');
+          } else {
+            await retry.click();
+          }
           await retryStarted.promise;
           if (moveFocus) await chosenField.focus();
-          await expect(moveFocus ? chosenField : retry).toBeFocused();
+          await expect(
+            moveFocus
+              ? chosenField
+              : activation === 'without focus'
+                ? page.getByRole('main')
+                : retry,
+          ).toBeFocused();
           retryResponse.release();
           expect((await recoveredRead).status()).toBe(200);
           await expect(refreshAlert).toHaveCount(0);
@@ -1176,10 +1294,59 @@ test('rejected schedule and user writes retain input and focus the error', async
       expect.arrayContaining([expect.objectContaining({ name: scheduleName })]),
     );
 
-    await page.goto('/dashboard?view=access');
-    await page
-      .getByRole('button', { name: `Delete ${username}`, exact: true })
-      .click();
+    let releaseUsersRead!: () => void;
+    let usersReadStarted!: () => void;
+    const usersRead = new Promise<void>((resolve) => {
+      usersReadStarted = resolve;
+    });
+    const usersResponse = new Promise<void>((resolve) => {
+      releaseUsersRead = resolve;
+    });
+    const holdUsersRead = async (route: Route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      usersReadStarted();
+      await usersResponse;
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'People refresh unavailable' }),
+      });
+    };
+    await page.route('**/api/users', holdUsersRead);
+    try {
+      await page.goto('/dashboard?view=access');
+      await usersRead;
+      await page
+        .getByRole('button', { name: `Delete ${username}`, exact: true })
+        .click();
+      const confirmDelete = page.getByRole('button', {
+        name: 'Delete user',
+        exact: true,
+      });
+      const cancelDelete = page
+        .getByRole('group', { name: `Remove ${username}`, exact: true })
+        .getByRole('button', { name: 'Cancel', exact: true });
+      await expect(confirmDelete).toBeEnabled();
+      await expect(cancelDelete).toBeFocused();
+      releaseUsersRead();
+      const refreshAlert = page
+        .getByRole('main')
+        .getByRole('alert')
+        .filter({ hasText: /people list could not be refreshed/i });
+      await expect(refreshAlert).toBeVisible();
+      await expect(confirmDelete).toBeDisabled();
+      await expect(cancelDelete).toBeFocused();
+      await page.unroute('**/api/users', holdUsersRead);
+      await refreshAlert
+        .getByRole('button', { name: 'Try again', exact: true })
+        .click();
+      await expect(refreshAlert).toHaveCount(0);
+      await expect(confirmDelete).toBeEnabled();
+      await expect(cancelDelete).toBeFocused();
+    } finally {
+      releaseUsersRead();
+      await page.unroute('**/api/users', holdUsersRead);
+    }
     await page
       .getByRole('button', { name: 'Delete user', exact: true })
       .click();
@@ -1279,6 +1446,7 @@ test('retrying a partially applied draft saves only the remaining schedule', asy
   await expect(page.getByRole('main').getByRole('alert')).toContainText(
     'Second schedule could not be saved.',
   );
+  await expect(page.getByRole('main').getByRole('alert')).toBeFocused();
   await expect(savedSchedule(page, firstName)).toBeVisible();
   await expect(
     page.getByRole('article').filter({
@@ -1304,6 +1472,7 @@ test('retrying a partially applied draft saves only the remaining schedule', asy
     page.getByRole('heading', { name: 'Review Drafts', exact: true }),
   ).toHaveCount(0);
   await expect(savedSchedule(page, secondName)).toBeVisible();
+  await expect(page.getByLabel('Describe schedule')).toBeFocused();
   expect(posts).toEqual([firstName, secondName, secondName]);
   const afterRetry = await browserJson(page, '/api/schedules');
   expect(afterRetry.status).toBe(200);
