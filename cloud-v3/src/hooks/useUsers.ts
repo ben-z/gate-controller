@@ -31,7 +31,8 @@ export async function createUser(user: CreateUserParams) {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to create user ${user.username}: ${res.statusText}`);
+    const { error } = await res.json();
+    throw new Error(error);
   }
 
   return res.json();
@@ -47,7 +48,8 @@ export async function updateUser(user: UpdateUserParams) {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to update user ${user.username}: ${res.statusText}`);
+    const { error } = await res.json();
+    throw new Error(error);
   }
 
   return res.json();
@@ -59,6 +61,7 @@ export async function deleteUser(username: string) {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to delete user ${username}: ${res.statusText}`);
+    const { error } = await res.json();
+    throw new Error(error);
   }
 } 

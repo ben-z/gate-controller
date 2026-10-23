@@ -1,78 +1,106 @@
 'use client';
 
-import { Schedule } from '@/types/schedule';
-import { TimeDisplay } from '@/components/time-display';
+import type { UpcomingSchedule } from '@/types/schedule';
+import { TimeDisplay } from './time-display';
+import { Icon } from './icon';
 import useSWR from 'swr';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 
-type UpcomingSchedule = {
-  schedule: Schedule;
-  nextExecution: string; // ISO string
-};
-
-const fetcher = async (url: string) => {
+async function fetcher(url: string) {
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Failed to fetch upcoming schedules');
-  }
+  if (!response.ok) throw new Error('Unable to load upcoming schedules.');
   return response.json();
-};
+}
 
 export function UpcomingSchedules() {
-  const { data: upcoming, error } = useSWR<UpcomingSchedule[]>(
-    '/api/schedules/upcoming',
-    fetcher,
-    {
-      refreshInterval: 5000, // Refresh every 5 seconds
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      keepPreviousData: true, // Keep showing the old data while fetching
-    }
-  );
+  const {
+    data: upcoming,
+    error,
+    mutate,
+  } = useSWR<UpcomingSchedule[]>('/api/schedules/upcoming', fetcher, {
+    refreshInterval: 5000,
+  });
+  const emptyState = useRef<HTMLDivElement>(null);
+  const upcomingList = useRef<HTMLOListElement>(null);
+  const retryWasFocused = useRef(false);
+  const retryRef = useCallback((button: HTMLButtonElement | null) => {
+    if (!button) return;
+    // Automatic recovery also removes Retry; capture focus before DOM removal.
+    return () => {
+      retryWasFocused.current = document.activeElement === button;
+    };
+  }, []);
 
-  if (error) {
+  useLayoutEffect(() => {
+    if (error || !retryWasFocused.current) return;
+    retryWasFocused.current = false;
+    (upcomingList.current ?? emptyState.current)?.focus();
+  }, [error]);
+
+  if (error)
     return (
-      <div className="text-center py-4 text-red-500 dark:text-red-400">
+      <div className="card-body inline-alert" role="alert">
         {error.message}
+        <button
+          ref={retryRef}
+          className="button button-secondary"
+          onClick={() => mutate()}
+        >
+          Try again
+        </button>
       </div>
     );
-  }
-
-  if (!upcoming) {
+  if (!upcoming)
     return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        No upcoming schedules
+      <div className="empty-state" role="status">
+        Loading upcoming schedules…
       </div>
     );
-  }
-
-  if (upcoming.length === 0) {
+  if (!upcoming.length)
     return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        No upcoming schedules
+      <div
+        ref={emptyState}
+        tabIndex={-1}
+        role="group"
+        aria-label="No upcoming gate commands"
+        className="empty-state upcoming-empty"
+      >
+        <span className="empty-icon">
+          <Icon name="calendar" />
+        </span>
+        <h3>No upcoming schedules</h3>
+        <p>Add or enable a schedule.</p>
       </div>
     );
-  }
 
   return (
-    <div className="space-y-2">
-      {upcoming.map(({ schedule, nextExecution }) => (
-        <div key={schedule.name} className="flex items-center justify-between py-2">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${
-              schedule.action === 'open' ? 'bg-red-500 dark:bg-red-400' : 'bg-green-500 dark:bg-green-400'
-            }`} />
-            <span className="font-medium">{schedule.name}</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              ({schedule.action})
-            </span>
+    <ol
+      ref={upcomingList}
+      className="upcoming-list"
+      tabIndex={0}
+      aria-label="Upcoming gate commands"
+    >
+      {upcoming.map(({ schedule, nextExecution, date, time }, index) => (
+        <li className="upcoming-row" key={`${schedule.name}-${nextExecution}`}>
+          <span className={`timeline-dot ${index === 0 ? 'next' : ''}`} />
+          <div className="upcoming-copy">
+            <div className="upcoming-date">
+              <time dateTime={nextExecution}>{date}</time>
+              <TimeDisplay
+                timestamp={new Date(nextExecution).getTime()}
+                format="relative"
+              />
+            </div>
+            <h3>{schedule.name}</h3>
+            <div className="upcoming-time">
+              <time dateTime={nextExecution}>{time}</time>
+              <span>
+                {schedule.action === 'open' ? 'Open gate' : 'Close gate'}
+              </span>
+            </div>
           </div>
-          <TimeDisplay
-            timestamp={new Date(nextExecution).getTime()}
-            format="relative"
-            className="text-sm text-gray-600 dark:text-gray-400"
-          />
-        </div>
+        </li>
       ))}
-    </div>
+    </ol>
   );
-} 
+}

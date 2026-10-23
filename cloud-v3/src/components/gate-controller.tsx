@@ -1,215 +1,272 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useGateStatus, updateGateStatus } from '@/hooks/useGateStatus';
-import { TimeDisplay, TimeFormat } from '@/components/time-display';
-import { UpcomingSchedules } from '@/components/upcoming-schedules';
+import { useFocusAfterCommit } from '@/hooks/useFocusAfterCommit';
+import { TimeDisplay } from './time-display';
+import { UpcomingSchedules } from './upcoming-schedules';
+import { GateIllustration } from './gate-illustration';
+import { Icon } from './icon';
 import { publicConfig } from '@/config';
-import { useState, useEffect } from 'react';
 
 export function GateController() {
   const { gateStatus, isLoading, isError, mutate } = useGateStatus(true);
-  const [timeFormat, setTimeFormat] = useState<TimeFormat>('controller');
-  const [actionInProgress, setActionInProgress] = useState<'open' | 'close' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'open' | 'close' | null>(
+    null,
+  );
+  const focusAfterCommit = useFocusAfterCommit(pendingAction !== null);
+  const feedbackRef = useRef<HTMLParagraphElement>(null);
+  const [feedback, setFeedback] = useState<{
+    error: boolean;
+    message: string;
+  } | null>(null);
+  const [, refreshContactAge] = useState(0);
+  const lastContactTimestamp = gateStatus?.lastContactTimestamp;
 
-  // Initialize time format from localStorage if available
   useEffect(() => {
-    const savedFormat = localStorage.getItem('timeFormat') as TimeFormat;
-    setTimeFormat(savedFormat || 'controller');
-  }, []);
+    if (!lastContactTimestamp) return;
+    const remaining =
+      lastContactTimestamp + publicConfig.gateContactStaleAfterMs - Date.now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(
+      () => refreshContactAge((age) => age + 1),
+      remaining + 1,
+    );
+    return () => clearTimeout(timer);
+  }, [lastContactTimestamp]);
 
-  // Save time format preference to localStorage
-  const handleTimeFormatChange = (format: TimeFormat) => {
-    setTimeFormat(format);
-    localStorage.setItem('timeFormat', format);
-  };
-
-  const handleGateAction = async (action: 'open' | 'close') => {
+  async function handleGateAction(action: 'open' | 'close') {
+    const initiatingFocus = document.activeElement;
+    setPendingAction(action);
+    setFeedback(null);
+    let saved = false;
     try {
-      setActionInProgress(action);
       await updateGateStatus(action);
+      saved = true;
+      await mutate(
+        (current) => {
+          if (!current)
+            throw new Error(
+              'Gate status disappeared after the command was saved.',
+            );
+          return { ...current, status: action === 'open' ? 'open' : 'closed' };
+        },
+        { revalidate: false },
+      );
+      setFeedback({
+        error: false,
+        message: `${action === 'open' ? 'Open' : 'Close'} command saved. The gate agent applies it at its next sync.`,
+      });
       await mutate();
     } catch (error) {
-      console.error('Error updating gate status:', error);
+      const failureMessage =
+        error instanceof Error ? error.message : 'The gate command failed.';
+      setFeedback({
+        error: true,
+        message: saved
+          ? 'The command was saved, but the latest gate details could not be loaded.'
+          : failureMessage,
+      });
     } finally {
-      setActionInProgress(null);
+      setPendingAction(null);
+      focusAfterCommit(() => {
+        if (
+          document.activeElement === document.body ||
+          document.activeElement === initiatingFocus
+        ) feedbackRef.current?.focus();
+      });
     }
-  };
-
-  if (isError) {
-    return <div>Error loading gate status</div>;
-  }
-
-  if (isLoading && !gateStatus) {
-    return <div>Loading gate status...</div>;
   }
 
   if (!gateStatus) {
-    return <div>No gate status available</div>;
+    return (
+      <div
+        className={isError ? 'inline-alert' : 'empty-state'}
+        role={isError ? 'alert' : 'status'}
+      >
+        {isError
+          ? 'Unable to load the gate. Check your connection and try again.'
+          : 'Loading gate status…'}
+        {isError && (
+          <button className="button button-secondary" onClick={() => mutate()}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
   }
 
+  const isOpen = gateStatus.status === 'open';
+  const recentlySynced =
+    gateStatus.lastContactTimestamp > 0 &&
+    Date.now() - gateStatus.lastContactTimestamp <
+      publicConfig.gateContactStaleAfterMs;
+
   return (
-    <div className="space-y-6">
-      <div className="text-xl flex flex-col items-center gap-2">
-        <div className="flex items-center gap-2">
-          <span>Current Status:</span>
-          <span className={`font-bold ${gateStatus.status === 'open' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
-            {gateStatus.status.toUpperCase()}
+    <div className="overview-layout">
+      <section className="card gate-card" aria-labelledby="gate-heading">
+        <div className="card-header">
+          <h2 className="section-heading" id="gate-heading">
+            <Icon name="gate" /> Main gate
+          </h2>
+          <span className={`sync-status ${recentlySynced ? 'synced' : ''}`}>
+            <span className="status-dot" />
+            {recentlySynced ? 'Recent agent sync' : 'Awaiting agent sync'}
           </span>
         </div>
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          <span>Last gate sync: </span>
-          <span className="font-medium">
-            <TimeDisplay
-              timestamp={gateStatus.lastContactTimestamp}
-              format="relative"
-              className={gateStatus.lastContactTimestamp === 0 || Date.now() - gateStatus.lastContactTimestamp > 60000 ? "text-red-500 dark:text-red-400" : ""}
-            />
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-8 sm:flex-row sm:gap-4 justify-center items-center">
-        <button
-          onClick={() => handleGateAction('open')}
-          disabled={gateStatus.status === 'open' || actionInProgress !== null}
-          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform relative ${
-            gateStatus.status === 'open' || actionInProgress !== null
-              ? 'bg-gray-400 dark:bg-gray-600'
-              : 'bg-red-500 active:scale-95 dark:bg-red-600 dark:active:bg-red-700'
-          }`}
-        >
-          {actionInProgress === 'open' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          <span className="relative z-10">Open Gate</span>
-        </button>
-
-        <button
-          onClick={() => handleGateAction('close')}
-          disabled={gateStatus.status === 'closed' || actionInProgress !== null}
-          className={`w-36 h-36 text-lg rounded-2xl text-white font-bold transition-transform relative ${
-            gateStatus.status === 'closed' || actionInProgress !== null
-              ? 'bg-gray-400 dark:bg-gray-600'
-              : 'bg-green-500 active:scale-95 dark:bg-green-600 dark:active:bg-green-700'
-          }`}
-        >
-          {actionInProgress === 'close' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          <span className="relative z-10">Close Gate</span>
-        </button>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-medium mb-3">Upcoming Schedules</h3>
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-          <UpcomingSchedules />
-        </div>
-      </div>
-
-      {gateStatus.history && (
-        <div>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-medium">Recent Activity</h3>
-            <select
-              value={timeFormat}
-              onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
-              className="rounded border border-gray-200 bg-transparent px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 sm:hidden"
-              title={`Select time format (Controller timezone: ${publicConfig.controllerTimezone})`}
-            >
-              <option value="relative">Relative</option>
-              <option value="controller">Controller</option>
-            </select>
+        <div className={`gate-stage ${isOpen ? 'gate-stage-open' : ''}`}>
+          <p className="eyebrow">Requested state</p>
+          <div className="gate-state" aria-live="polite">
+            {isOpen ? 'Open' : 'Closed'}
           </div>
-          <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50">
-            <div className="space-y-3 p-4 sm:hidden">
-              {gateStatus.history.map((entry, index) => (
-                <div
-                  key={index}
-                  className="rounded-lg bg-white p-3 text-sm dark:bg-gray-800"
+          <div className="gate-actions">
+            <div className="gate-action-buttons">
+              {(['open', 'close'] as const).map((action) => (
+                <button
+                  key={action}
+                  className={`button ${action === 'open' ? 'button-primary' : 'button-secondary'}`}
+                  onClick={() => handleGateAction(action)}
+                  disabled={
+                    (action === 'open' ? isOpen : !isOpen) ||
+                    pendingAction !== null ||
+                    !!isError ||
+                    isLoading
+                  }
+                  aria-busy={pendingAction === action}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <ActionBadge action={entry.action} />
-                    <TimeDisplay
-                      timestamp={entry.timestamp}
-                      format={timeFormat === 'relative' ? 'relative' : publicConfig.controllerTimezone}
-                      className="text-sm text-gray-600 dark:text-gray-400"
-                    />
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {entry.actor}{entry.actor_name ? `: ${entry.actor_name}` : ''}
-                  </div>
-                </div>
+                  <Icon
+                    name={
+                      action === 'open' ? 'arrow-up-right' : 'arrow-down-right'
+                    }
+                  />
+                  {pendingAction === action
+                    ? 'Saving command…'
+                    : `${action === 'open' ? 'Open' : 'Close'} Gate`}
+                </button>
               ))}
             </div>
-
-            <div className="hidden max-h-[300px] overflow-y-auto sm:block">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <div className="flex items-center gap-2">
-                        Time
-                        <select
-                          value={timeFormat}
-                          onChange={(e) => handleTimeFormatChange(e.target.value as TimeFormat)}
-                          className="text-xs bg-transparent border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-                          title={`Select time format (Controller timezone: ${publicConfig.controllerTimezone})`}
-                        >
-                          <option value="relative">Relative</option>
-                          <option value="controller">Controller</option>
-                        </select>
-                      </div>
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actor</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {gateStatus.history.map((entry, index) => (
-                    <tr key={index} className="hover:bg-gray-100 dark:hover:bg-gray-800/50">
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <ActionBadge action={entry.action} />
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                        <TimeDisplay
-                          timestamp={entry.timestamp}
-                          format={timeFormat === 'relative' ? 'relative' : publicConfig.controllerTimezone}
-                        />
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                        {entry.actor}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                        {entry.actor_name || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <p className="field-hint">
+              Commands take effect when the gate agent syncs. Physical position
+              is not reported.
+            </p>
+            {isError && (
+              <p className="inline-alert" role="alert">
+                Connection lost. Controls are paused until the gate status
+                refreshes.
+              </p>
+            )}
+            {feedback && (
+              <p
+                ref={feedbackRef}
+                tabIndex={-1}
+                role={feedback.error ? 'alert' : 'status'}
+                className={feedback.error ? 'inline-alert' : 'feedback-success'}
+              >
+                {feedback.message}
+              </p>
+            )}
           </div>
+          <GateIllustration open={isOpen} />
+          <p className="gate-sync">
+            <Icon name="refresh" />
+            Last agent sync:{' '}
+            {gateStatus.lastContactTimestamp === 0 ? (
+              'Not yet connected'
+            ) : (
+              <TimeDisplay
+                timestamp={gateStatus.lastContactTimestamp}
+                format="relative"
+              />
+            )}
+          </p>
         </div>
-      )}
+      </section>
+      <section
+        className="card upcoming-card"
+        aria-labelledby="upcoming-heading"
+      >
+        <div className="card-header">
+          <h2 className="section-heading" id="upcoming-heading">
+            <Icon name="calendar" /> Up next
+          </h2>
+          <span className="small-label">AUTOMATION</span>
+        </div>
+        <UpcomingSchedules />
+        <div className="upcoming-footer">
+          <span className="field-hint">
+            Times in {publicConfig.controllerTimezone.replaceAll('_', ' ')}
+          </span>
+          <Link
+            className="button button-ghost"
+            href="/dashboard?view=schedules"
+          >
+            Manage schedules <Icon name="chevron-right" />
+          </Link>
+        </div>
+      </section>
+      <section
+        className="card activity-card"
+        aria-labelledby="activity-heading"
+      >
+        <div className="card-header">
+          <h2 className="section-heading" id="activity-heading">
+            <Icon name="activity" /> Recent activity
+          </h2>
+          <span className="small-label">COMMAND HISTORY</span>
+        </div>
+        {gateStatus.history?.length ? (
+          <ul
+            className="activity-list"
+            tabIndex={0}
+            aria-label="Recent command history"
+          >
+            {gateStatus.history.map((entry, index) => (
+              <li className="activity-row" key={`${entry.timestamp}-${index}`}>
+                <span
+                  className={`activity-icon ${entry.action === 'open' ? 'opening' : ''}`}
+                >
+                  <Icon
+                    name={
+                      entry.action === 'open'
+                        ? 'arrow-up-right'
+                        : 'arrow-down-right'
+                    }
+                  />
+                </span>
+                <div className="activity-copy">
+                  <span>
+                    {entry.action === 'open' ? 'Open' : 'Close'} command
+                  </span>
+                  <span className="muted">
+                    {entry.actor_name ||
+                      (entry.actor === 'system' ? 'System' : 'Schedule')}
+                    <span className="activity-separator">·</span>
+                    {entry.actor === 'user' ? 'Manual control' : entry.actor}
+                  </span>
+                </div>
+                <div className="activity-times">
+                  <TimeDisplay
+                    timestamp={entry.timestamp}
+                    format="relative"
+                    className="activity-time"
+                  />
+                  <TimeDisplay
+                    timestamp={entry.timestamp}
+                    format={publicConfig.controllerTimezone}
+                    className="activity-exact"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="empty-state">
+            <Icon name="activity" />
+            <h3>No commands yet</h3>
+          </div>
+        )}
+      </section>
     </div>
-  );
-}
-
-function ActionBadge({ action }: { action: 'open' | 'close' }) {
-  return (
-    <span
-      className={`px-2 py-1 text-xs font-medium rounded-full ${
-        action === 'open'
-          ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-          : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-      }`}
-    >
-      {action}
-    </span>
   );
 }

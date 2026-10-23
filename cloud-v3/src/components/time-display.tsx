@@ -4,57 +4,43 @@ import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 
-/**
- * Time display format options:
- * - relative: Shows time relative to now (e.g., "2 minutes ago")
- * - controller: Shows time in controller's timezone
- */
-export type TimeFormat = 'relative' | 'controller';
-
-/**
- * Displays a timestamp in various formats.
- */
-export function TimeDisplay({ 
-  timestamp, 
-  format, 
-  className = "" 
-}: { 
-  timestamp: number; // Unix timestamp in milliseconds
-  format: 'relative' | string; // 'relative' or timezone string
+export function TimeDisplay({
+  timestamp,
+  format,
+  className,
+}: {
+  timestamp: number;
+  format: string;
   className?: string;
 }) {
-  const [, forceUpdate] = useState({});
-
-  // Update the relative time display every minute
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => forceUpdate({}), 60000);
+    if (format !== 'relative') return;
+    const timer = setInterval(() => setTick((tick) => tick + 1), 60_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [format]);
 
-  // Create Date object from Unix timestamp
   const date = new Date(timestamp);
-  
-  // Ensure the timestamp is valid
-  if (isNaN(date.getTime())) {
-    console.error('Invalid timestamp:', timestamp);
-    return <span className={className}>invalid time</span>;
+  if (format === 'relative') {
+    return (
+      <time dateTime={date.toISOString()} className={className}>
+        {formatDistanceToNow(date, { addSuffix: true })}
+      </time>
+    );
   }
-
-  // Format relative time
-  const relativeTime = formatDistanceToNow(date, { 
-    addSuffix: true,
-    includeSeconds: true  // Show more precise times for recent events
-  });
-  
-  // Format time using specified timezone
-  const formatStr = 'yyyy-MM-dd HH:mm:ss zzz';
-  const zonedTime = formatInTimeZone(date, format === 'relative' ? 'UTC' : format, formatStr);
-
-  const displayTime = format === 'relative' ? relativeTime : zonedTime;
+  const absoluteTime = formatInTimeZone(
+    date,
+    format,
+    'yyyy-MM-dd HH:mm:ss zzz',
+  );
 
   return (
-    <span title={zonedTime} className={className}>
-      {displayTime}
-    </span>
+    <time
+      dateTime={date.toISOString()}
+      title={absoluteTime}
+      className={className}
+    >
+      {absoluteTime}
+    </time>
   );
-} 
+}

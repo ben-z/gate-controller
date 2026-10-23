@@ -55,6 +55,29 @@ test("api routes enforce auth and controlled edge errors", async ({
   await login(page, admin.username, admin.password);
 
   expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username: admin.username, role: "user" },
+    })
+  ).toEqual({
+    status: 400,
+    body: { error: "Cannot demote the last admin user" },
+  });
+  const usersAfterRejectedDemotion = await browserJson(page, "/api/users");
+  expect(usersAfterRejectedDemotion.status).toBe(200);
+  expect(usersAfterRejectedDemotion.body).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ username: admin.username, role: "admin" }),
+    ])
+  );
+  expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username: admin.username },
+    })
+  ).toEqual({ status: 200, body: { success: true } });
+
+  expect(
     await browserJson(page, "/api/schedules", {
       body: {
         action: "open",
@@ -74,6 +97,16 @@ test("api routes enforce auth and controlled edge errors", async ({
       name: scheduleName,
     },
   });
+  const upcomingResponse = await browserJson(page, "/api/schedules/upcoming");
+  expect(upcomingResponse.status).toBe(200);
+  const scheduled = (upcomingResponse.body as Array<{ schedule: { name: string }; nextExecution: string }>).find(entry => entry.schedule.name === scheduleName);
+  expect(scheduled).toBeDefined();
+  const nextExecution = new Date(scheduled!.nextExecution);
+  expect(nextExecution.getUTCHours()).toBe(6);
+  expect(nextExecution.getUTCMinutes()).toBe(0);
+  expect(nextExecution.getUTCSeconds()).toBe(0);
+  expect(nextExecution.getUTCMilliseconds()).toBe(0);
+
   expect(
     await browserJson(page, "/api/schedules", {
       body: {
@@ -158,13 +191,19 @@ test("api routes enforce auth and controlled edge errors", async ({
 
   expect(
     await browserJson(page, "/api/users", {
-      body: { password, role: "user", username },
+      body: { password, role: "admin", username },
       method: "POST",
     })
   ).toMatchObject({
     status: 200,
-    body: { created_by: admin.username, role: "user", username },
+    body: { created_by: admin.username, role: "admin", username },
   });
+  expect(
+    await browserJson(page, "/api/users", {
+      method: "PUT",
+      body: { username, role: "user" },
+    })
+  ).toEqual({ status: 200, body: { success: true } });
   expect(
     await browserJson(page, "/api/users", {
       body: { password, role: "user", username },

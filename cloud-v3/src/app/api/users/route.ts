@@ -1,5 +1,11 @@
 import { NextRequest } from 'next/server';
-import { getUsers, createUser, updateUser, deleteUser } from '@/lib/db';
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  LastAdminDemotionError,
+} from '@/lib/db';
 import {
   ApiError,
   apiError,
@@ -59,11 +65,18 @@ export async function PUT(request: NextRequest) {
       throw new ApiError(400, `User not found: ${username}`);
     }
 
-    updateUser({
-      username,
-      password,
-      role
-    });
+    try {
+      updateUser({
+        username,
+        password,
+        role
+      });
+    } catch (error) {
+      if (error instanceof LastAdminDemotionError) {
+        throw new ApiError(400, error.message);
+      }
+      throw error;
+    }
 
     return Response.json({ success: true });
   } catch (error) {

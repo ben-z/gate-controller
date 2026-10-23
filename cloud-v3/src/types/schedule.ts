@@ -6,9 +6,21 @@ export interface Schedule {
   created_by?: string;
 }
 
+export type ScheduleExecution = {
+  timestamp: string;
+  date: string;
+  time: string;
+};
+
+export type UpcomingSchedule = Pick<ScheduleExecution, 'date' | 'time'> & {
+  schedule: Schedule;
+  nextExecution: string;
+};
+
 export type ScheduleDraft = ScheduleInput & {
   description: string;
   nextExecutions: string[];
+  executionTimes: ScheduleExecution[];
   summary: string;
 };
 

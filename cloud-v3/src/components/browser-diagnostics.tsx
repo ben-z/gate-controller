@@ -18,9 +18,12 @@ export function BrowserDiagnostics() {
 
     async function loadStorageState() {
       try {
+        if (!navigator.storage?.persisted || !navigator.storage?.estimate) {
+          throw new Error('Storage diagnostics are not supported by this browser.');
+        }
         const [persistent, estimate] = await Promise.all([
-          navigator.storage?.persisted?.() ?? false,
-          navigator.storage?.estimate?.() ?? {},
+          navigator.storage.persisted(),
+          navigator.storage.estimate(),
         ]);
 
         if (!cancelled) {
@@ -46,8 +49,12 @@ export function BrowserDiagnostics() {
     };
   }, []);
 
+  if (storage.error) {
+    return <p className="inline-alert" role="alert">{storage.error}</p>;
+  }
+
   const storageDiagnostics = [
-    ['Persistent storage', storage.error ?? formatBoolean(storage.persistent)],
+    ['Persistent storage', formatBoolean(storage.persistent)],
     ['Storage usage', `${formatBytes(storage.usage)} / ${formatBytes(storage.quota)}`],
   ] as const;
 

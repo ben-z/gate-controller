@@ -34,9 +34,17 @@ jobs:
       - run: python3 -m pip install requests==2.34.2 sentry-sdk==1.45.1
       - run: python3 -m unittest discover -s ../agent -v
       - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
+      - id: e2e
+        run: npm run e2e
         env:
           E2E_OPENAI_API_KEY: ${{ secrets.E2E_OPENAI_API_KEY }}
+      - name: Retain failed browser test diagnostics
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-test-failures
+          path: cloud-v3/test-results/
+          if-no-files-found: error
 
   container-smoke:
     runs-on: ubuntu-latest

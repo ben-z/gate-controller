@@ -5,6 +5,7 @@ import {
   validateCronExpression,
 } from "@/lib/cron";
 import { ApiError } from "@/lib/api";
+import { formatScheduleExecution } from "@/lib/schedule-display";
 import {
   Schedule,
   ScheduleDraftProgress,
@@ -183,6 +184,13 @@ function normalizeDraftResponse(
 
     const name = nextAvailableName(cleanName(draft.name), usedNames);
     usedNames.add(name);
+    const executionTimes = getNextCronExecutions(
+      draft.cron_expression,
+      config.controllerTimezone,
+      5
+    ).map((timestamp) =>
+      formatScheduleExecution(timestamp, config.controllerTimezone)
+    );
 
     return {
       name,
@@ -191,11 +199,8 @@ function normalizeDraftResponse(
       enabled: draft.enabled === true,
       summary: typeof draft.summary === "string" ? draft.summary.trim() : "",
       description: describeCronExpression(draft.cron_expression),
-      nextExecutions: getNextCronExecutions(
-        draft.cron_expression,
-        config.controllerTimezone,
-        5
-      ),
+      nextExecutions: executionTimes.map(({ timestamp }) => timestamp),
+      executionTimes,
     };
   });
 

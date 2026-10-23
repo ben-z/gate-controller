@@ -26,7 +26,7 @@ export function useSchedules() {
   };
 }
 
-export async function createSchedule(schedule: ScheduleInput) {
+export async function createSchedule(schedule: ScheduleInput): Promise<Schedule> {
   const res = await fetch('/api/schedules', {
     method: 'POST',
     headers: {
@@ -109,7 +109,7 @@ export async function draftSchedules(
   return result;
 }
 
-export async function updateSchedule(name: string, updates: Partial<ScheduleInput>) {
+export async function updateSchedule(name: string, updates: Partial<ScheduleInput>): Promise<Schedule> {
   const res = await fetch(`/api/schedules?name=${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: {

@@ -1,43 +1,70 @@
-"use client";
-import { login } from "@/lib/auth/login";
-import Form from "next/form";
-import { useActionState } from "react";
+'use client';
+
+import { login } from '@/lib/auth/login';
+import Form from 'next/form';
+import Link from 'next/link';
+import { useActionState, useState } from 'react';
+import { Icon } from '@/components/icon';
+import { GateIllustration } from '@/components/gate-illustration';
+
+function Brand() {
+  return (
+    <Link href="/" className="brand" aria-label="Gate Controller home">
+      <span className="brand-mark">
+        <Icon name="gate" />
+      </span>
+      <span>
+        Gate<span className="brand-light"> Controller</span>
+      </span>
+    </Link>
+  );
+}
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, null);
+  const [username, setUsername] = useState('');
 
   return (
-    <div className="flex justify-center p-4 pt-12">
-      <div className="w-full max-w-sm">
-        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl shadow-lg p-6 sm:p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gate Controller</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please sign in to continue</p>
+    <main className="login-page">
+      <section className="login-story" aria-label="Gate Controller">
+        <Brand />
+        <div className="login-story-copy">
+          <GateIllustration open={false} />
+        </div>
+      </section>
+      <section className="login-panel" aria-labelledby="login-heading">
+        <div className="login-form">
+          <div className="login-mobile-brand">
+            <Brand />
           </div>
-
-          <Form action={formAction} className="space-y-6">
+          <h1 id="login-heading">Sign in</h1>
+          <Form action={formAction}>
             {state?.error && (
-              <div className="p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/50 dark:text-red-200 rounded-lg">
+              <div className="inline-alert" role="alert">
+                <Icon name="alert" />
                 {state.error}
               </div>
             )}
-
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="username" className="field-label">
                 Username
               </label>
               <input
                 type="text"
                 id="username"
                 name="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                placeholder="Enter your username"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="field"
+                disabled={pending}
               />
             </div>
-
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="password" className="field-label">
                 Password
               </label>
               <input
@@ -45,21 +72,26 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                placeholder="Enter your password"
+                autoComplete="current-password"
+                className="field"
+                disabled={pending}
               />
             </div>
-
             <button
               type="submit"
               disabled={pending}
-              className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-busy={pending}
+              className="button button-primary"
             >
-              {pending ? "Signing in..." : "Sign in"}
+              {pending ? 'Signing in…' : 'Sign in'}
+              <Icon name="arrow-up-right" />
             </button>
           </Form>
+          <p className="login-note">
+            Contact an administrator if you need access.
+          </p>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
