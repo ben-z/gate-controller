@@ -245,7 +245,7 @@ test("api routes enforce auth and controlled edge errors", async ({
   await login(userPage, username, password);
 
   await expect(userPage.getByRole("heading", { name: "Diagnostics" })).toHaveCount(0);
-  await expect(userPage.getByRole("heading", { name: "User Management" })).toHaveCount(0);
+  await expect(userPage.getByRole("heading", { name: /^People \(\d+\)$/ })).toHaveCount(0);
   expect(await browserJson(userPage, "/api/users")).toEqual({
     status: 403,
     body: { error: "Forbidden" },

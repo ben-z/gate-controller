@@ -27,6 +27,7 @@ export function UserManagement() {
   const noticeRef = useRef<HTMLDivElement>(null);
   const locked =
     pending || editor !== null || deletingUsername !== null || !!isError;
+  const saveLabel = editor?.original ? 'Save changes' : 'Create account';
 
   function restoreFocus(button: HTMLButtonElement | null) {
     focusAfterCommit(() => {
@@ -165,7 +166,7 @@ export function UserManagement() {
         className={isError ? 'inline-alert' : 'empty-state'}
         role={isError ? 'alert' : 'status'}
       >
-        {isError ? 'Unable to load users.' : 'Loading users…'}
+        {isError ? 'Unable to load people.' : 'Loading people…'}
         {isError && (
           <button
             ref={retryButton}
@@ -182,20 +183,16 @@ export function UserManagement() {
   return (
     <section className="card" aria-labelledby="users-heading">
       <div className="card-header">
-        <div>
-          <p className="eyebrow">PEOPLE & PERMISSIONS</p>
-          <h2 className="section-heading" id="users-heading">
-            User Management
-          </h2>
-          <p className="muted">Choose who can control your gate.</p>
-        </div>
+        <h2 className="section-heading" id="users-heading">
+          People ({users.length})
+        </h2>
         <button
           className="button button-primary"
           ref={addButton}
           onClick={(event) => openEditor(undefined, event.currentTarget)}
           disabled={locked}
         >
-          <Icon name="plus" /> Add User
+          <Icon name="plus" /> Add person
         </button>
       </div>
 
@@ -236,7 +233,7 @@ export function UserManagement() {
           <h3 className="section-heading" id="user-editor-heading">
             {editor.original
               ? `Edit ${editor.data.username}`
-              : 'Give someone access'}
+              : 'Add person'}
           </h3>
           <fieldset disabled={pending}>
             <div className="form-grid">
@@ -309,8 +306,8 @@ export function UserManagement() {
                   }
                   className="field"
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  <option value="user">Member</option>
+                  <option value="admin">Administrator</option>
                 </select>
               </div>
             </div>
@@ -320,9 +317,7 @@ export function UserManagement() {
                 className="button button-primary"
                 disabled={!!isError}
               >
-                {pending
-                  ? 'Saving…'
-                  : `${editor.original ? 'Update' : 'Create'} User`}
+                {pending ? 'Saving…' : saveLabel}
               </button>
               <button
                 type="button"
@@ -339,17 +334,13 @@ export function UserManagement() {
       <div className="access-summary">
         <Icon name="users" />
         <p>
-          <strong>
-            {users.length} {users.length === 1 ? 'person has' : 'people have'}{' '}
-            access.
-          </strong>{' '}
-          Users can control the gate and manage schedules. Admins can also
-          manage people and view system details.
+          Members can control the gate and manage schedules. Administrators
+          can also manage people and view server configuration.
         </p>
       </div>
 
       {users.length > 0 ? (
-        <ul className="member-list" aria-label="Users">
+        <ul className="member-list" aria-label="People">
           {users.map((user) => (
             <li key={user.username} className="member-row">
               <div className="member-avatar" aria-hidden="true">
@@ -366,10 +357,8 @@ export function UserManagement() {
                   )}
                 </p>
               </div>
-              <span
-                className={`status-pill ${user.role === 'admin' ? 'positive' : 'neutral'}`}
-              >
-                {user.role === 'admin' ? 'Admin' : 'User'}
+              <span className="status-pill neutral">
+                {user.role === 'admin' ? 'Administrator' : 'Member'}
               </span>
               <div className="member-actions">
                 <button
@@ -410,7 +399,7 @@ export function UserManagement() {
                       onClick={() => handleDelete(user.username)}
                       disabled={pending || !!isError}
                     >
-                      {pending ? 'Removing…' : 'Delete user'}
+                      {pending ? 'Removing…' : 'Delete account'}
                     </button>
                     <button
                       ref={deleteCancelButton}
@@ -429,8 +418,8 @@ export function UserManagement() {
       ) : (
         <div className="empty-state">
           <Icon name="users" />
-          <h3>No users yet</h3>
-          <p>Add a user to give them access to your gate.</p>
+          <h3>No people yet</h3>
+          <p>Add a person to give them access to the gate.</p>
         </div>
       )}
     </section>

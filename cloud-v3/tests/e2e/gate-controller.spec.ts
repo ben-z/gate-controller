@@ -187,7 +187,7 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   const username = 'e2e-user';
   const password = 'user-password';
   await openView(page, 'Access');
-  await page.getByRole('button', { name: 'Add User' }).click();
+  await page.getByRole('button', { name: 'Add person' }).click();
   await page.getByLabel('Username', { exact: true }).fill(username);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await expect(
@@ -197,10 +197,10 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
     page.getByRole('button', { name: 'Delete admin', exact: true }),
   ).toBeDisabled();
   await page.getByLabel('Role', { exact: true }).selectOption('user');
-  await page.getByRole('button', { name: 'Create User' }).click();
+  await page.getByRole('button', { name: 'Create account' }).click();
   await expect(
     page
-      .getByRole('list', { name: 'Users' })
+      .getByRole('list', { name: 'People' })
       .getByText(username, { exact: true }),
   ).toBeVisible();
 
@@ -208,7 +208,7 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
     .getByRole('button', { name: `Edit ${username}`, exact: true })
     .click();
   await expect(page.getByLabel('Username', { exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Update User' }).click();
+  await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('status')).toContainText(`${username} updated`);
   await expect(
     page.getByRole('button', { name: `Edit ${username}`, exact: true }),
@@ -263,7 +263,7 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   await expectNoPrivateDiagnostics(userPage, privateDiagnostics);
   await userPage.goto('/dashboard?view=access');
   await expect(
-    userPage.getByRole('heading', { name: 'User Management' }),
+    userPage.getByRole('heading', { name: /^People \(\d+\)$/ }),
   ).toHaveCount(0);
   await expect(
     userPage.getByRole('heading', { name: 'Diagnostics' }),
@@ -292,20 +292,20 @@ test('gate controller works end-to-end', async ({ browser, page, request }) => {
   ).toBeFocused();
   await expect(
     page
-      .getByRole('list', { name: 'Users' })
+      .getByRole('list', { name: 'People' })
       .getByText(username, { exact: true }),
   ).toBeVisible();
   await page
     .getByRole('button', { name: `Delete ${username}`, exact: true })
     .click();
-  await page.getByRole('button', { name: 'Delete user', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete account', exact: true }).click();
   await expect(
     page
-      .getByRole('list', { name: 'Users' })
+      .getByRole('list', { name: 'People' })
       .getByText(username, { exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Add User', exact: true }),
+    page.getByRole('button', { name: 'Add person', exact: true }),
   ).toBeFocused();
 
   await openView(page, 'Schedules');
@@ -553,7 +553,7 @@ test('field edits preserve changes made in another session', async ({
         new URL(request.url()).pathname === '/api/users',
     );
     await page
-      .getByRole('button', { name: 'Update User', exact: true })
+      .getByRole('button', { name: 'Save changes', exact: true })
       .click();
     expect((await userRequest).postDataJSON()).toEqual({ username, password });
     await expect(page.getByRole('status')).toContainText(`${username} updated`);
@@ -624,7 +624,7 @@ test('views support browser history, direct links, and narrow screens', async ({
           ).toBeFocused();
         }
         if (view === 'Access') {
-          await page.getByRole('button', { name: 'Add User' }).click();
+          await page.getByRole('button', { name: 'Add person' }).click();
           await expect(
             page.getByLabel('Username', { exact: true }),
           ).toBeVisible();
@@ -633,7 +633,7 @@ test('views support browser history, direct links, and narrow screens', async ({
             .getByRole('button', { name: 'Cancel', exact: true })
             .click();
           await expect(
-            page.getByRole('button', { name: 'Add User', exact: true }),
+            page.getByRole('button', { name: 'Add person', exact: true }),
           ).toBeFocused();
         }
       }
@@ -1503,7 +1503,7 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   ).toBeFocused();
 
   await openView(page, 'Access');
-  await page.getByRole('button', { name: 'Add User', exact: true }).click();
+  await page.getByRole('button', { name: 'Add person', exact: true }).click();
   await page.getByLabel('Username', { exact: true }).fill(username);
   await page
     .getByLabel('Password', { exact: true })
@@ -1515,16 +1515,16 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
       response.request().method() === 'GET' &&
       response.status() === 503,
   );
-  await page.getByRole('button', { name: 'Create User', exact: true }).click();
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await usersRefreshFailed;
   await expect(page.getByRole('status')).toContainText(`${username} added`);
   await expect(
     page
-      .getByRole('list', { name: 'Users' })
+      .getByRole('list', { name: 'People' })
       .getByText(username, { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Create User', exact: true }),
+    page.getByRole('button', { name: 'Create account', exact: true }),
   ).toHaveCount(0);
   const usersRefreshAlert = page
     .getByRole('main')
@@ -1554,7 +1554,7 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   await retryUsers.click();
   await expect(usersRefreshAlert).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Add User', exact: true }),
+    page.getByRole('button', { name: 'Add person', exact: true }),
   ).toBeFocused();
 
   await page
@@ -1562,7 +1562,7 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
     .click();
   await page.getByLabel('Role', { exact: true }).selectOption('admin');
   await page.route('**/api/users', rejectRead);
-  await page.getByRole('button', { name: 'Update User', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('status')).toContainText(`${username} updated`);
   await expect(retryUsers).toBeFocused();
   await page.unroute('**/api/users', rejectRead);
@@ -1576,19 +1576,19 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   await retryUsers.click();
   await expect(usersRefreshAlert).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Add User', exact: true }),
+    page.getByRole('button', { name: 'Add person', exact: true }),
   ).toBeFocused();
 
   await page
     .getByRole('button', { name: `Delete ${username}`, exact: true })
     .click();
   await page.route('**/api/users', rejectRead);
-  await page.getByRole('button', { name: 'Delete user', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete account', exact: true }).click();
   await expect(page.getByRole('status')).toContainText(`${username} removed`);
   await expect(retryUsers).toBeFocused();
   await expect(
     page
-      .getByRole('list', { name: 'Users' })
+      .getByRole('list', { name: 'People' })
       .getByText(username, { exact: true }),
   ).toHaveCount(0);
   await page.unroute('**/api/users', rejectRead);
@@ -1600,7 +1600,7 @@ test('confirmed schedule and user saves survive a failed list refresh', async ({
   await retryUsers.click();
   await expect(usersRefreshAlert).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Add User', exact: true }),
+    page.getByRole('button', { name: 'Add person', exact: true }),
   ).toBeFocused();
 
   await openView(page, 'Schedules');
@@ -1814,14 +1814,14 @@ test('rejected schedule and user writes retain input and focus the error', async
     );
 
     await openView(page, 'Access');
-    await page.getByRole('button', { name: 'Add User', exact: true }).click();
+    await page.getByRole('button', { name: 'Add person', exact: true }).click();
     await page.getByLabel('Username', { exact: true }).fill(username);
     await page
       .getByLabel('Password', { exact: true })
       .fill('rejected-user-password');
     await page.getByLabel('Role', { exact: true }).selectOption('admin');
     await page
-      .getByRole('button', { name: 'Create User', exact: true })
+      .getByRole('button', { name: 'Create account', exact: true })
       .click();
     await expect(writeError).toBeFocused();
     await expect(page.getByLabel('Username', { exact: true })).toHaveValue(
@@ -1897,7 +1897,7 @@ test('rejected schedule and user writes retain input and focus the error', async
         .getByRole('button', { name: `Delete ${username}`, exact: true })
         .click();
       const confirmDelete = page.getByRole('button', {
-        name: 'Delete user',
+        name: 'Delete account',
         exact: true,
       });
       const cancelDelete = page
@@ -1925,11 +1925,11 @@ test('rejected schedule and user writes retain input and focus the error', async
       await page.unroute('**/api/users', holdUsersRead);
     }
     await page
-      .getByRole('button', { name: 'Delete user', exact: true })
+      .getByRole('button', { name: 'Delete account', exact: true })
       .click();
     await expect(writeError).toBeFocused();
     await expect(
-      page.getByRole('button', { name: 'Delete user', exact: true }),
+      page.getByRole('button', { name: 'Delete account', exact: true }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     const usersAfterDelete = await browserJson(page, '/api/users');
