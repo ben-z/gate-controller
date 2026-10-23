@@ -115,36 +115,39 @@ export function GateController() {
             {recentlySynced ? 'Recent agent sync' : 'Awaiting agent sync'}
           </span>
         </div>
-        <div className={`gate-stage ${isOpen ? 'gate-stage-open' : ''}`}>
+        <div className="gate-stage">
           <p className="eyebrow">Requested state</p>
           <div className="gate-state" aria-live="polite">
             {isOpen ? 'Open' : 'Closed'}
           </div>
           <div className="gate-actions">
             <div className="gate-action-buttons">
-              {(['open', 'close'] as const).map((action) => (
-                <button
-                  key={action}
-                  className={`button ${action === 'open' ? 'button-primary' : 'button-secondary'}`}
-                  onClick={() => handleGateAction(action)}
-                  disabled={
-                    (action === 'open' ? isOpen : !isOpen) ||
-                    pendingAction !== null ||
-                    !!isError ||
-                    isLoading
-                  }
-                  aria-busy={pendingAction === action}
-                >
-                  <Icon
-                    name={
-                      action === 'open' ? 'arrow-up-right' : 'arrow-down-right'
+              {(['open', 'close'] as const).map((action) => {
+                const alreadyRequested = action === 'open' ? isOpen : !isOpen;
+                return (
+                  <button
+                    key={action}
+                    className={`button ${alreadyRequested ? 'button-secondary' : 'button-primary'}`}
+                    onClick={() => handleGateAction(action)}
+                    disabled={
+                      alreadyRequested ||
+                      pendingAction !== null ||
+                      !!isError ||
+                      isLoading
                     }
-                  />
-                  {pendingAction === action
-                    ? 'Saving command…'
-                    : `${action === 'open' ? 'Open' : 'Close'} Gate`}
-                </button>
-              ))}
+                    aria-busy={pendingAction === action}
+                  >
+                    <Icon
+                      name={
+                        action === 'open' ? 'arrow-up-right' : 'arrow-down-right'
+                      }
+                    />
+                    {pendingAction === action
+                      ? 'Saving command…'
+                      : `${action === 'open' ? 'Open' : 'Close'} Gate`}
+                  </button>
+                );
+              })}
             </div>
             <p className="field-hint">
               Commands take effect when the gate agent syncs. Physical position
